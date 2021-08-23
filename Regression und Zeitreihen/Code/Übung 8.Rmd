@@ -1,0 +1,266 @@
+---
+title: "Übung 8"
+output: 
+  html_document: 
+    toc: yes
+    toc_depth: 5
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl) 
+library(dplyr)
+library(car)
+library(e1071)
+library(ggplot2)
+library(mFilter)
+
+```
+
+#### 1. Saisonkomponente
+Die Saisonkomponente ist jene Schwankung, die innerhalb einer Zeiteinheit regelmässig auftaucht, z.B. ein Maximal-Wert immer im Winter. Additive Modelle sind für konstante Schwankunen geeignet, multiplikative für zu/-abnehmende Schwankungsbreiten.
+
+#### 2. Trigonometrisches Modell für Saisonkomponente
+
+##### 1. Skizzieren Sie die Funktionen sin(x) und cos(x). Nehmen Sie nur 4 Punkte 0, 0.5π, π, 2π
+```{r 2_1}
+plot(sin(seq(0,2*pi,.01)), type = "l", col="blue", xaxt="n", ylab="sin(x)")
+axis(1, c(0, pi*50, pi*100, pi*150, 2*pi*100), c("0","π/2", "π","3π/2", "2π"))
+lines(cos(seq(0,2*pi,.01)), col="red")
+abline(h = 0)
+```
+
+##### 2. Erklären Sie die Auswirkung von A, λ und c auf die generierte Reihe
+Allgemeine Sinusfunktion: f(x) = A sin(λx + c)  
+A: Multiplikationsfaktor für die Amplitude  
+λ: Frequenzfaktor: erhöht die Frequzenz der Schwingung um Faktor λ  
+c: verschiebt Schwingung konstant entlang der x-Achse  
+
+##### 3. Wie sind die Periodendauer und Frequenz bei Quartalszahlen zu definieren?
+Periodendauer ist die Zeit, um von einem Maximum zum nächsten zu gelangen, in Quartalen.  
+Die Frequenz ist der Kehrwert der Periodendauer.  
+
+##### 4. Benutzen Sie die Datei USAutos.gdt für Ihre Schätzungen. Definieren Sie die neuen Variablen
+```{r 1_4}
+autos <- read_excel("US Autos.xls", skip=1)
+autos <- autos %>% 
+  rename(T = Index) %>%
+  mutate(T2 = T**2, cos1t = cos(T*3.1416/6), cos2t=cos(T*3.1416/3), sin1t = sin(T*3.1416/6), sin2t = sin(T*3.1416/3))
+```
+
+##### 5. Schätzen Sie folgende Modelle
+```{r 1_5}
+mod1 <- lm(yt~T+T2+cos1t+sin1t, autos)
+mod2 <- lm(yt~T+T2+cos1t+sin1t+cos2t+sin2t, autos)
+summary(mod1)
+summary(mod2)
+```
+
+
+##### 6. Erstellen Sie die Grafik der originären Zeitreihe mit der angepassten Daten
+```{r 2_6}
+plot(autos$T, autos$yt, type = "l", col="red")
+lines(mod1$fitted.values, col="blue")
+lines(mod2$fitted.values, col="green")
+```
+
+
+##### 7. Welches Modell würden Sie vorziehen?
+Modell 2 schätzt die wahren Werte sehr akkurat.
+
+##### 8. Erstellen Sie mittels Modell 2 Prognosen für den Prognosezeitraum 1998:2 – 1999:01
+```{r 2_8}
+mod2red <- lm(yt~T+T2+cos1t+sin1t+cos2t+sin2t, autos[1:97,])
+pred2 <- predict(mod2red, newdata = autos[98:109,])
+plot(autos$T, autos$yt, type = "l", col="red", ylim = c(min(autos$yt), max(pred2)))
+lines(mod2red$fitted.values, col="blue")
+lines(cbind(98:109,pred2), col="green")
+```
+
+
+#### 3. Census-Verfahren X-12-Arima
+Benutzen Sie die gretl Funktion X-12-ARIMA für die Bereinigung der Zeitreihe der registrierten Autos.
+```{r 3_1}
+autots <- ts(autos$yt, frequency = 12, start = c(1990, 1))
+autoarima <- arima(autots)
+```
+
+
+#### 4. Hodrick-Prescott Filter (HP-Filter)
+
+##### 1. Erklären Sie die Idee dieser Glättungsmethode
+Die Idee der Methode besteht darin, die Abwägung zwischen einer möglichst guten Anpassung der vorhandenen Daten einerseits und einer möglichst glatten Trendkomponente andererseits explizit vorzugeben.
+
+##### 2. Erklären Sie kurz beide Komponente der Zielfunktion für den HP-Filter:
+Term 1: Summe der quadrierten Abweichungen von y und Trendwert  
+Term 2: Summe der quadrierten zweiten Differenzen der Trendkomponente, mal λ.
+
+##### 3. Erklären Sie die Auswirkung auf die Glättung für kleine und grosse Gewichtungsparameter λ.
+λ ist somit Bestrafungsterm. Je grösser λ, desto grösser die Bestrafung und desto glatter die Trendkomponente.  
+
+
+##### 4. Glätten Sie die Zeitreihe der registrierten Autos anhand des HP-Filters. Anschliessend wiederholen Sie die Glättung mit λ = 100. Was stellen Sie fest?
+```{r 4_1}
+autoshp <- hpfilter(autots)
+autoshp
+autoshp2 <- hpfilter(autots, freq = 100)
+autoshp2
+plot(autoshp)
+plot(autoshp2)
+```
+
+
+#### 5. Saisondummies
+
+##### 1. Erstellen Sie das Zeitreihendiagram. Was stellen Sie fest?
+```{r 5_1}
+sales <- read.csv("Übung 8 Retail sales.csv", sep = ";")
+salests <- ts(sales$Sales, frequency = 4, start = c(1996, 1))
+plot(salests)
+```
+
+Klar ansteigender Trend, mit Saisonkomponente
+
+##### 2. Schätzen Sie das Trendmodell yt = β1 + β2t + ut
+```{r 5_2}
+sales$obs <- 1:49
+mod3 <- lm(Sales~obs, sales)
+summary(mod3)
+plot(mod3)
+```
+
+
+##### 3. Erklären Sie was Saisondummies sind.
+Dummy-Variable für p-1 Saisons, die indiziert, ob es sich um bestimmte Saison handelt oder nicht.
+
+##### 4. Schätzen Sie das Modell 2 mit den entsprechenden Saisondummies.
+Modell2:yt =β1 +β2t+β3D2 +β4D3 +β5D4 +u
+```{r 5_4}
+sales$d2 <- ifelse((sales$obs-2) %% 4==0,1,0)
+sales$d3 <- ifelse((sales$obs-3) %% 4==0,1,0)
+sales$d4 <- ifelse((sales$obs-4) %% 4==0,1,0)
+salests <- ts(sales, frequency = 4, start = c(1996, 1))
+mod4 <- lm(Sales~obs+d2+d3+d4, sales)
+summary(mod4)
+mod5 <- lm(Sales~d2+d3+d4, salests)
+summary(mod5)
+```
+
+
+##### 5. Welche implizite Annahme legt dieser Spezifikation mit Dummyvariablen zugrunde? Welches Quartal ist das Referenzquartal?
+Annahme: ?  
+Referenzquartal: Q1  
+
+##### 6. Welches Modell weist die beste Anpassungsgüte auf?
+Modell 4: adj. R^2^ = `r summary(mod4)$adj.r.squared`  
+
+##### 7. Berechnen Sie die normierten Saisonfaktoren anhand der Regressionsergebnisse. (H57:H60)
+```{r 5_7}
+sf <- c(0, mod4$coefficients[3:5])
+nf <- sum(sf)/4
+sf-nf 
+```
+
+
+##### 8. Interpretieren Sie den Saisonfaktor S3
+Im Quartal 3 liegen die Verkäufe um 22666 unter dem Trend.
+
+#### 6. Holt-Winters Modell
+
+##### 1. Erstellen Sie das Zeitreihendiagram. Was stellen Sie fest?
+```{r 6_1}
+sport <- read.csv("Übung 8 Sportgegränke.csv", sep = ";")
+sportts <- ts(sport, freq=4, start = c(2006, 1))
+plot(sportts[,2])
+
+plot(as.data.frame(sportts), type="l", col="red")
+cons <- seq(1,32,4)
+lines(as.data.frame(sportts)[cons,], col="blue")
+lines(as.data.frame(sportts)[cons+2,], col="blue")
+```
+
+linearer Trend, Saisonkomponente, die grösser wird
+
+##### 2. Wann wird das Holt-Winters Verfahren angewendet?
+Prognose von Zeitreihen mit linearem Trend und Saisonkomponente.
+
+##### 3. Glätten Sie mittels Winters-Methode die Zeitreihe mit den Parametern α = 0.3, γ = 0.1 und δ = 0.7?
+```{r}
+hw <- HoltWinters(sportts[,2], alpha = .3, beta = .1, gamma = .7, seasonal = "a")
+plot(hw)
+plot(hw$fitted)
+dc <- decompose(sportts[,2])
+plot(dc)
+```
+
+
+#### 7. Multiplikatives Modell
+
+##### 1. Schreiben Sie das multiplikative Komponentenmodell auf und erklären Sie wann es angewendet werden sollte.
+xt =(β0 +β1t)*St * ut  
+Niveau: Lt = α(xt/St−p) + (1 − α)(Lt−1 + bt−1)
+Trend: bt = γ(Lt − Lt−1) + (1 − γ)bt−1
+Saison: St = δ(xt/Lt) + (1 − δ)St−p  
+  
+Anwendung: wenn der Saisoneffekt proportional zum Niveau der Zeitreihe ist.
+
+##### 2. Berechnen Sie den Wert A des gleitenden Durchschnitts auf zwei Nachkommastellen.
+```{r 7_2}
+A <- (.5*409 + 498 + 387 + 473 + .5*513)/4
+A
+```
+
+
+##### 3. Bestimmen Sie den Wert B für die Saisonkomponente auf 3 Nachkommastellen gerundet.
+```{r 7_3}
+B <- 387/A
+B
+
+
+```
+
+
+##### 4. Berechnen Sie die unnormierte Saisonkomponente des ersten Quartals auf 3 Nachkom- mastellen gerundet.
+```{r}
+Squer <- c(3.989-1.019-1.137-.875, 1.019, 1.137, .875)
+NF <- 4/sum(Squer)
+SquerN <- Squer*NF
+SquerN
+1.129 /SquerN[3]
+```
+
+
+##### 5. Berechnen Sie den Wert C für den Normalisierungsfaktor auf 3 Nachkommastellen gerundet.
+```{r 7_5}
+C <- SquerN[4]
+C
+```
+
+
+##### 6. Berechnen Sie die normierte Saisonkomponente des 4. Quartals (C) auf 3 Nachkommastellen gerundet.
+
+
+##### 7. Berechnen Sie den saisonbereinigten Wert D auf 2 Nachkommastellen gerundet.
+```{r}
+D <- 387/C
+D
+```
+
+
+##### 8. Berechnen Sie den geschätzten Trendwert E mittels des geschätzten Trendmodells: xˆt = 325 + 17.8t
+```{r}
+xt <- c(362, 385, 432, 341, 382, 409, 498, 387, 473, 513, 582, 474, 544, 582, 681, 557, 628, 707, 773, 592, 627, 725, 854, 661)
+df <- data.frame(cbind(1:24, xt))
+df
+mod <- lm(xt~V1, df)
+summary(mod)
+E <- predict(mod, newdata =data.frame(V1=8))
+E
+```
+
+
+##### 9. Berechnen Sie den entsprechenden Prognosefehler auf 2 Nachkommastellen gerundet.
+```{r}
+df$xt[8] - E*C
+```
+

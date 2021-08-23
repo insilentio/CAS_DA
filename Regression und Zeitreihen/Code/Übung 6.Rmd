@@ -1,0 +1,283 @@
+---
+title: "Übung 6"
+output: 
+  html_document: 
+    toc: yes
+    toc_depth: 5
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl) 
+library(dplyr)
+library(car)
+library(e1071)
+library(ggplot2)
+
+oz2g <- 28.35
+smoke <- read.csv("Übung 6.csv", sep=";")
+smoke <- smoke %>%
+  mutate(bwgramm = bwght*oz2g, smoker = cigs>0)
+```
+
+#### 1. Analyse der Daten.
+```{r 1}
+head(smoke)
+n <- nrow(smoke)
+nrow(smoke[smoke$male == 0,])
+summary(smoke)
+nsmoke <- sum(smoke$smoker)
+nsmoke
+nsmoke/n
+sum(smoke$cigs)/nsmoke
+mean(smoke[smoke$smoker,]$faminc)
+sum(smoke$white)
+```
+
+##### Wie viele Frauen sind in der Stichprobe enthalten?
+665 weibliche Babies, 1388 Frauen (eigentlich wäre die Entität ja das Baby)
+
+##### Wie hoch ist der durchschnittliche Zigarettenkonsum pro Tag? Ist dieser Durchschnittswert repräsentativ für die typische Frau aus der Stichprobe?
+2.1. Nein, ist sehr schiefe Verteilung.
+
+##### Wie viele Frauen Rauchen während der Schwangerschaft? Was ist der Anteil von Raucherinnen in der Stichprobe?
+212 ≙  15%
+
+##### Wie hoch ist der durchschnittliche Zigarettenkonsum pro Tag unter den Raucherinnen?
+13.67
+
+##### Wie hoch ist das durchschnittliche Familieneinkommen? Vergleichen Sie die Stichprobe mit der Teilmenge der Raucherinnen.
+29kUSD vs. 21kUSD
+
+##### Wie viele Neugeborene sind in der Stichprobe weiss?
+1089
+
+#### 2. Welchen Einfluss erwarten Sie für die Variablen cigs und faminc (Familieneinkommen) auf das Geburtsgewicht des Neugeborenen (Vorzeichen für β2 und β3)? Begründen Sie Ihre Antwort.
+β2 negativ: Rauchen ist ungesund
+β3 positiv: höheres Einkommen --> mehr Ausgaben für Gesundheit
+
+#### 3. Schätzen Sie das Modell 1:
+bwght = β1 + β2 cigs + u
+```{r 3}
+mod1 <- lm(bwght~cigs, smoke)
+summary(mod1)
+```
+
+
+#### 4. Welche Korrelation erwarten Sie zwischen den Variablen cigs (Zig-Konsum) und faminc (Familieneinkommen)? Erklären Sie, warum die Korrelation positiv oder negativ sein könnte.
+Gegenläufige Korrelation. Mehr Einkommen --> normalerweise bessere Ausbildung --> normalerweise gesundheitsbewusster. Könnte auch gleichläufig sein, da mehr Einkommen --> mehr Stress --> mehr Raucher
+
+
+#### 5. Analysieren Sie die Korrelationsstruktur zwischen den Variablen bwght, cigs und faminc
+```{r 5}
+cor(smoke[c("bwght", "cigs", "faminc")])
+```
+Zigarettenkonsum hat negative Korrelation mit Geburtsgewicht, Einkommen positive. Zigaretten hat negative Korrelation mit Einkommen.
+
+#### 6. Ermitteln Sie die Korrelation zwischen cigs und faminc mittels Regression. Einmal für die gesamte Stichprobe, einmal für die Gruppe der Raucherinnen. Wie ändert sich diese Korrelation für diese Teilmenge aus der Stichprobe?
+```{r 6}
+summary(lm(faminc~cigs, smoke))
+summary(lm(faminc~cigs, smoke[smoke$smoker,]))
+```
+Pro Zigarette reduziert sich das durchschnittliche Haushaltseinkommen um 543$. Bei den Raucherinnnen reduziert es sich nur nur 212$, jeweils c.p.
+
+#### 7. Welchen Effekt hat vermutlich die Hinzunahme von faminc (Familieneinkommen) auf den geschätzten Regressionskoeffizienten bcigs?
+Ich hätte gesagt, β2 wird betragsmässig grösser, da ohne das gegenläufige faminc der Wert unterschätzt wurde.
+
+#### 8. Schätzen Sie das Modell 2:
+bwght = β1 + β2 cigs + β3 faminc + u
+```{r 8}
+mod2 <- lm(bwght~cigs+faminc, smoke)
+smod2 <- summary(mod2)
+smod2
+```
+
+
+
+#### 9. Es soll nun die Dummy-Variable male als zusätzlicher Regressor hinzugefügt werden (Wert 1, wenn das Neugeborene männlich ist, 0 für weiblich).
+Vermuten Sie, dass die Berücksichtigung dieser Dummy-Variable einen deutlichen Effekt auf bcigs und bfaminc oder deren Standardfehler hat? Warum bzw. warum nicht? Überprüfen Sie Ihre Vermutung anschliessend.  
+Da das Geschlecht bei Babies einen kleinen Teil des Gewichtsunterschieds erklären dürft, könnte ein kleiner Effekt und speziell eine Reduktion der Standardfehler ersichtlich sein.
+
+
+#### 10. Schätzen Sie das Modell 3: bwght = β1 + β2cigs + β3faminc + β4male + u 
+Vergleichen Sie die Koeffizienten, deren Standardfehler und adj. R2 zwischen Modell 3 und 2.
+```{r 10}
+mod3 <- lm(bwght~cigs+faminc+male, smoke)
+smod3 <- summary(mod3)
+smod3$coefficients[1:3,]-smod2$coefficients
+smod3$adj.r.squared - smod2$adj.r.squared
+```
+Unterschied auf Koeffizienten und Standardfehler ist marginal. Auch adj.R^2^ unterscheidet sich nur um 5‰
+
+#### 11. Interpretieren Sie bfaminc im Gramm (Modell 3).
+Eine Erhöhung des Einkommens um 1000$ führt zu einer Erhöhung des Geburtsgewichts von `r smod3$coefficients[3]*oz2g`g, c.p.
+
+#### 12. Berechnen Sie die Koeffizienten b*cigs und b*male falls das Geburtsgewicht des Neugeborenen in Gramm ausgedrückt wird.
+Modell4: bwghtgr=β1* +β2*cigs+β3* faminc+β4*male+u
+```{r 12}
+mod4 <- lm(bwgramm~cigs+faminc+male, smoke)
+smod4 <- summary(mod4)
+smod4
+```
+
+
+
+#### 13. Wie ist die Beziehung zwischen den Koeffizienten aus Modell 3 und 4?
+```{r 13}
+smod4$coefficients / smod3$coefficients
+```
+linear transformiert um Faktor `r oz2g`
+
+#### 14. Interpretieren Sie den Koeffizienten bfaminc (Modell 4).
+Eine Erhöhung des Einkommens um 1000$ führt zu einer Erhöhung des Geburtsgewichts um `r smod4$coefficients[3]`g, c.p.
+
+#### 15. Folgende Modelle wurden geschätzt. Interpretieren Sie jeweils den Koeffizienten b3 in Gramm.
+
+##### bwght = 112.138 − 0.465cigs + 1.927 ln(faminc) + 3.096 male
+Eine Erhöhung des Einkommens um 1% führt zu einer Erhöhung des Gewichts um 1.927 \*0.01 \*`r oz2g` = `r 1.927*.01*oz2g`g, c.p.
+
+##### ln(bwght = 4.703 − 0.00406cigs + 0.0169 ln(faminc) + 0.0258 male
+Eine Erhöhung des Einkommens um 1% führt zu einer Erhöhung des Gewichts um 0.017%, c.p.
+
+##### ln(bwght) = 4.729 − 0.0401cigs + 0.000878 faminc + 0.0259 male
+Eine Erhöhung des Einkommens um 1000$ führt zu einer Erhöhung des Gewichts um 0.088%, c.p.
+
+
+#### 16. Erstellen Sie ein Histogramm von ln(bwght) und bwght. Welcher Unterschied ist zu vermerken?
+```{r 16}
+qplot(log(smoke$bwght), geom = 'blank') +
+  geom_line(aes(y = ..density.., colour = 'Empirical'), stat = 'density') +
+  stat_function(fun = dnorm, args=list(mean(log(smoke$bwght)), sd(log(smoke$bwght))), aes(colour = 'Normal')) +
+  geom_histogram(aes(y = ..density..), alpha = 0.4) +
+  scale_colour_manual(name = 'Density', values = c('red', 'blue')) +
+  theme(legend.position = c(0.85, 0.85))
+
+qplot(smoke$bwght, geom = 'blank') +
+  geom_line(aes(y = ..density.., colour = 'Empirical'), stat = 'density') +
+  stat_function(fun = dnorm, args=list(mean(smoke$bwght), sd(smoke$bwght)), aes(colour = 'Normal')) +
+  geom_histogram(aes(y = ..density..), alpha = 0.4) +
+  scale_colour_manual(name = 'Density', values = c('red', 'blue')) +
+  theme(legend.position = c(0.85, 0.85))
+
+```
+Das logarithmierte Gewicht ist schlechter normalverteilt.
+
+#### 17. Der Regressor faminc wurde durch fatheduc (Ausbildungsdauer des Vaters gemessen in Jahren) ersetzt. Interpretieren Sie jeweils den Koeffizienten b3 in Gramm für folgende Regressionsschätzungen:
+
+#####  bwght = 113.260 − 0.571cigs + 0.411 fatheduc + 3.568 male
+Pro Jahr zusätzliche Ausbildungsdauer des Vaters erhöht sich das Geburtsgewicht um `r .411*oz2g`g, c.p.
+
+##### bwght = 106.528 − 0.574cigs + 4.772 ln(fatheduc) + 3.524 male
+Pro 1% zusätzliche Ausbildungsdauer des Vaters erhöht sich das Geburtsgewicht um `r .01*4.772*oz2g`g, c.p.
+
+##### ln(bwght)=4.664−0.005cigs+0.0372ln(fatheduc)+0.0313male
+Pro 1% zusätzliche Ausbildungsdauer des Vaters erhöht sich das Geburtsgewicht um .0372%, c.p.
+
+##### ln(bwght) = 4.716 −0.0049cigs + 0.0033 fatheduc + 0.0317 male
+Pro Jahr zusätzliche Ausbildungsdauer des Vaters erhöht sich das Geburtsgewicht um `r .0033*100`%, c.p.
+
+
+#### 18. Schätzen Sie das Modell 5:
+bwght = β1 + β2cigs + β3parity + β4faminc + β5motheduc + β6fatheduc + u  
+Die Variable parity stellt die Reihenfolge des Neugeborenen unter den Familienkindern.
+```{r 18}
+mod5 <- lm(bwght~cigs+parity+faminc+motheduc+fatheduc, smoke)
+smod5 <- summary(mod5)
+smod5
+```
+
+
+##### Interpretieren Sie den Wert parity = 3. Wie viel Gramm mehr wird das dritte Kind gegenüber dem Erstgeborenen im Durchschnitt wiegen?
+Das 3. Kind wiegt im Schnitt `r smod5$coefficients[3]*(3-1)*oz2g`g mehr, c.p.
+
+##### Warum reduziert gretl hier jeweils die Zahl der einbezogenen Familien bei diesen Schätzungen (Frage 13)? Erklären Sie die Konsequenz über die Repräsentativität der ”selektierten“ Familien haben?
+Datensätze, welche in einem der Koeffizienten ein NA haben, werden nicht berücksichtigt. Die Repräsentativität sinkt.
+
+##### Spielt die Reihenfolge des Neugeborenen eine Rolle für das Geburtsgewicht? Interpretieren Sie konkret den Koeffizienten bparity in Gramm.
+Ja, für jedes zusätzliche Kind erhöht sich im Schnitt das Geburtsgewicht um `r smod5$coefficients[3]*oz2g`g, c.p.
+
+##### Sind alle Steigungskoeffizienten gemeinsam signifikant (Modell 5)? Wie lautet die Nullhypothese?
+Ja, p-Wert des F-tests ist mit `r pf(smod5$fstatistic[1],smod5$fstatistic[2], smod5$fstatistic[3], lower.tail = F)` annähernd 0. Die Nullhypothese H0: Alle Koeffizienten = 0 wird somit verworfen. 
+
+#### 19. Testen Sie die Nullhypothese im Modell 5, dass die Elternausbildung keinen Effekt auf das Gewicht des Neugeborenen hat.
+
+##### Mittels gretl Test
+```{r 19, results='hold'}
+lh5 <- linearHypothesis(mod5, c("motheduc=0", "fatheduc=0"), test = "F")
+lh5
+qf(.05,2,1185, lower.tail = F)
+N <- nrow(mod5$model)
+K <- nrow(smod5$coefficients)
+L <- lh5[2,]$Df
+R2 <- smod5$r.squared
+R2r <- summary(lm(bwght~cigs+parity+faminc, smoke[!is.na(smoke$fatheduc),]))$r.squared
+(R2r-R2)/(R2-1)*(N-K)/L
+```
+H0: motheduc = fatheduc = 0 wird nicht verworfen, da p-Wert grösser α.
+
+##### Bestimmen Sie den kritischen Wert Fc mittels gretl. Was ist Ihre Schlussfolgerung?
+Der F-Wert ist mit 1.4373 kleiner als der kritische Wert von `r qf(.05,2,1185, lower.tail = F)`. Die H0 kann nicht verworfen werden.
+
+##### Berechnen Sie den F-Wert mittels Bestimmtheitsmass R2 durch eigene Schätzung des restringierten Modells.
+ESS/RSS * (N-K)/L  
+N = 1191  
+K = 6  
+L = 2  
+
+#### 20. Da die Ausbildungsangaben für die Mütter immer vorhanden sind, selektieren Sie im Hauptfenster die Variable fatheduc und dann das Menü auswählen: Stichprobe / Entferne Beobachtungen mit Fehlwerten (nicht dauerhaft).
+Schätzen Sie das Modell 6:  
+ln(bwght) = β1 + β2cigs + β3 ln(faminc) + β4parity + β5male + β6white + u  
+```{r 20}
+#das wäre Datenbasis gemäss Aufgabenstellung. Gretl printscreen ist aber anders: smoke[!is.na(smoke$fatheduc),]
+mod6 <- lm(log(bwght)~cigs+log(faminc)+parity+male+white, smoke)
+smod6 <- summary(mod6)
+smod6
+```
+
+
+##### Was ist der Effekt auf das Geburtsgewicht, wenn die Mutter 10 Zigaretten pro Tag mehr raucht?
+Pro 10 Zigaretten vermindert sich das Geburtsgewicht im Schnitt um `r 10*smod6$coefficients[2]*100`%, c.p.
+
+##### Wie viel mehr Geburtsgewicht weist ein männliches Neugeborenes gegenüber einem Weiblichen auf, cp.? Ist der Koeffizient β5 signifikant auf dem 5%-Signifikanzniveau?
+Im Schnitt um `r smod6$coefficients[5]*100`% mehr. Signfikant mit p = `r smod6$coefficients[5,4]`
+
+##### Wie viel mehr Geburtsgewicht weist ein weisses Neugeborenes gegenüber der Referenzgruppe auf, cp.? Ist der Koeffizient β6 signifikant auf dem 5%- Signifikanzniveau?
+Im Schnitt um `r smod6$coefficients[6]*100`% mehr. Signfikant mit p = `r smod6$coefficients[6,4]`
+
+#### 21. Schätzen Sie das Modell 7: 
+ln(bwght) = β1+ β2cigs+β3ln(faminc)+ β4parity + β5male+ β6white+ β7motheduc + β8fatheduc + u
+```{r 21}
+summary(lm(log(bwght)~cigs+log(faminc)+parity+male+white+motheduc+fatheduc, smoke))
+```
+
+
+##### Was ist die Auswirkung eines zusätzlichen Ausbildungsjahres der Mutter auf das Geburtsgewicht?
+Pro zusätzliches Ausbildungsjahr sinkt das Geburtsgewicht um 0.3%, c.p.
+
+#### 22. Schätzen Sie das Modell 8:
+bwght = β1 + β2cigs + β3ln(faminc) + β4parity + β5male + β6white + β7motheduc + β8fatheduc + u
+```{r 22}
+summary(lm(bwght~cigs+log(faminc)+parity+male+white+motheduc+fatheduc, smoke))
+```
+
+
+##### Wie viel mehr Geburtsgewicht in Gramm weist ein männliches Neugeborenes gegenüber der Referenzgruppe auf, ceteris paribus? Ist der Koeffizient b5 signifikant auf dem 5%- Signifikanzniveau?
+Im Schnitt um `r 3.8247*oz2g`g. Ja, hochsignifikant.
+
+#### 23. Antworten Sie auf diese Fragen mittels einer Regression.
+```{r 23}
+smod9 <- summary(lm(bwght~male, smoke))
+```
+
+
+##### Wie viel wiegt ein weibliches Neugeborenes im Durchschnitt in Kilogramm?
+`r smod9$coefficients[1]*oz2g/1000`kg
+
+##### Wie viel mehr Geburtsgewicht in Gramm weist ein männliches Neugeborenes gegenüber einem Weiblichen auf?
+`r smod9$coefficients[2]*oz2g`g
+
+##### Warum ist der Steigungskoeffizient kleiner als βmale im Modell 8.
+Aufgrund des einzigen Koeffizienten wird dieser hier unterschätzt, während in 8 weitaus mehr Koeffizienten eine geringere Verschätzung bewirken.
+
+#### 24. Welches Modell würden Sie vorziehen? Begründen Sie Ihre Antwort.
+Modell 8

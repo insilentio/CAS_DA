@@ -1,0 +1,205 @@
+---
+title: 'Take Home Exam: 2017 FS CAS DA, Tooling und Datenmanagement'
+author: "Daniel Baumgartner"
+date: "17.6.2017"
+output: 
+  html_document: 
+    theme: spacelab
+    toc: yes
+    toc_depth: 4
+---
+<!-- Einige css-Vorarbeiten für das Layout, speziell für die kable Tabelle -->
+<style type="text/css">
+.main-container { max-width: 1000px;}
+.table { width: 40%;}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T)
+
+# alle nötigen packages erst überprüfen, allenfalls runterladen und dann laden
+# dazu eine Funktion erstellen, die dann die Arbeit übernimmt
+ipak <- function(pkg){
+    new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+    if (length(new.pkg)) 
+        install.packages(new.pkg, dependencies = T)
+    sapply(pkg, require, character.only = T)
+}
+# die im Code benötigten Packages definieren und mit obiger Funktion laden:
+packages <- c("foreign", "dplyr", "reshape2", "stargazer", "xml2", "rvest", "knitr")
+ipak(packages)
+```
+
+# Übung 1: Ebay-Auktionen
+
+### 1. Daten laden
+Die Daten in das "ebay" Objekt schreiben und mit head() und str() eine Übersicht gewinnen:
+```{r load_data, results="hold"}
+ebay <- read.dta("http://www.farys.org/daten/ebay.dta")
+head(ebay)
+str(ebay)
+```
+Wir sehen, dass der Gerätetyp (Variable "subcat") aus einem Faktor mit 106 Leveln gebildet wird, die für unser dataset grossteils nicht relevant sind. Da uns die unbenutzten Level später nur stören würden (z.B. beim Boxplot), ersetzen wir den Faktor mit einem neuen, der nur die benutzten Levels enthält.
+
+```{r replace_factor}
+ebay$subcat <- ebay$subcat[,drop = T]
+levels(ebay$subcat)
+```
+Nun enthält die Variable "Gerätetyp" nur noch die verwendeten Ausprägungen.
+
+
+### 2. Erzeugen der Variable "rating"
+Die neue Variable wird mit der "mutate"-Funktion via piping erzeugt; zusätzlich werden diejenigen Datensätze ausgefiltert, welche weniger als 12 positive Bewertungen haben und das Ganze in ein neues data.frame "ebay.new" geschrieben. Ein erster Scatterplot deutet nicht auf grosse Abhängigkeiten zwischen dem Preis und dem Rating hin:
+```{r var_rating}
+ebay.new <- ebay %>%
+  filter(sepos >= 12) %>%
+  mutate(rating = sepos / (sepos + seneg))
+plot(ebay.new$rating, ebay.new$price)
+```
+
+
+### 3. Erzeugen der Variable "makellos"
+Eine weitere Variable wird mit der "mutate"-Funktion hinzugefügt. Dann schauen wir uns das aufbereitete dataset mit der "summary"-Funktion mal an:
+```{r makellos}
+ebay.new <- ebay.new %>%
+  mutate(makellos = rating > .98)
+summary(ebay.new)
+```
+Wir sehen, dass das "rating" im Schitt sehr hoch ist (98.9%) und der Anteil an makellosen Bewertungen den anderen im Verhältnis von über 4:1 übertrifft (3566:805). Der Datensatz enthält wie gewünscht nur noch records mit mindestens 12 positiven Bewertungen.
+
+
+### 4. Geschichteten Boxplot zeichnen
+Mit der "boxplot"-Funktion zeichnen wir nun zweimal einen Boxplot, gruppiert nach Gerätetyp und geschichtet nach dem "makellos"-Wert.
+Wichtig: da der zweite Boxplot nur hinzugefügt wird (Parameter "add"), wird die vom ersten Plot erzeugte Achsenskalierung verwendet. Damit deshalb keine Werte abgeschnitten werden, müssen erst mal die Minima und Maxima über alle Daten ermittelt und dann für die Ordinatenskalierung des ersten Plots verwendet werden.
+```{r boxplot_prep}
+max.value <- ebay.new %>%
+  select(price, makellos) %>% 
+  top_n(1, price)
+
+min.value <- ebay.new %>%
+  select(price, makellos) %>% 
+  top_n(1, -price)
+```
+
+Die Schichtung erreichen wir, indem wir die Boxen des ersten plots (makellos) mit dem Parameter "at" etwas nach links verschieben, die des zweiten plots (nicht makellos) etwas nach rechts. Ausserdem reduzieren wir mit "boxwex" die Breite der Boxen ein wenig, damit sie sich nicht überlagern. Mit "cex.axis" reduzieren wir die Schriftgrösse der Achsen, damit die Texte ganz Platz haben.
+Die Abszissenbeschriftung überlagert im Standardfall die Kategorienbeschriftungen, was nicht sehr schön aussieht. Deshalb lassen wir sie erst leer und plotten sie dann separat mit "title" innerhalb des Charts.
+Die Legende wird ebenfalls separat hinzugefügt.
+
+Der output vom graphic device kann mit "dev.copy2pdf" als PDF exportiert werden; so ersparen wir uns doppeltes Coding (1x für das Markdown-HTML, 1x für das exportierte PDF).
+```{r boxplot, results="hold", out.width="90%"}
+# Damit die Kategorienbeschriftungen auf dem Plot Platz haben, muss der Parameter "mar" angepasst werden.
+# Die Default-Parameter werden zwischengespeichert, damit später ein  Zurücksetzen möglich ist
+old <- par(mar = c(7, 5, 4, 2) + 0.1)
+
+# Nun das Ganze plotten
+boxplot(price ~ subcat, # y- und x-Achse
+        data = ebay.new,
+        subset = (makellos == T),
+        col = "green",
+        boxwex = 0.25,
+        at = 1:7 - 0.2,
+        xlab = "",
+        ylab = "Preis", 
+        ylim = c(min.value[,1], max.value[,1]),
+        las = 2,
+        cex.axis = 0.7,
+        main = "Erzielte Gerätepreise, geschichtet nach Verkäuferrating")
+boxplot(price ~ subcat,
+        data = ebay.new,
+        subset = (makellos == F),
+        col = "red",
+        boxwex = 0.25,
+        at = 1:7 + 0.2,
+        add = T,
+        xaxt = "n",
+        yaxt = "n")
+title(xlab = "Gerätetyp",
+      mgp = c(-1, -1, -0))
+legend(0.1,370,
+       legend = c("makellos", "nicht makellos" ),
+       fill = c( "green", "red" ), cex = 0.7)
+
+# und zum Schluss ein PDF erzeugen. Zu beachten: Bei Verwendung von knit wird die Output-Datei immer
+# in dasselbe Verzeichnis geschrieben, wo die Quellcode-Datei liegt (nicht zwing)
+dev.copy2pdf(file = "TakeHomeExamDB Boxplot.pdf",
+             paper = "a4r",
+             fonts = "Helvetica")
+```
+
+Das "makellos"-Rating scheint zumindest visuell auf den Verkaufspreis kaum einen Einfluss zu haben.
+
+Abschliessend wird das Ausgabe-Device geschlossen und die Parameter wieder auf die Default-Werte zurückgesetzt.
+```{r close, results="hide"}
+dev.off()
+par(old)
+```
+
+
+### 5. Regressionsmodelle rechnen
+#### Modell 1
+Für die Regressionsmodelle verwenden wir die Funktion "lm". Mit der Tilde "~" wird angegeben, dass die Zielvariable links der Tilde mit den erklärenden Variablen rechts der Tilde modelliert werden soll.
+```{r model1}
+model1 <- lm(price ~ subcat + rating, data = ebay.new)
+summary(model1)
+```
+Der recht hohe p-Wert für das rating zeugt von einer geringen Signifikanz für den Verkaufspreis. Unter Berücksichtigung der geringen Signifikanz bewirkt eine Zunahme des ratings um 1% eine Zunahme des Verkaufspreises um 21 cents. 
+
+#### Modell 2
+```{r model2}
+model2 <- lm(price ~ subcat + rating + listpic, data = ebay.new)
+summary(model2)
+```
+Thumbnails haben einen tiefen p-Wert und somit eine hohe Signifikanz für den Verkaufspreis. Das Hinzufügen eines Thumbnails führt zu einem um 6.72$ höheren Verkaufspreis.
+
+Mit "stargazer" erzeugen wir eine Tabelle mit beiden Modellen und schreiben sie als Output in ein HTML:
+```{r stargazer_out}
+stargazer(list(model1, model2),
+          type = "text",
+          column.labels = c("Modell 1", "Modell 2"),
+          out = "TakeHomeExamDB Regression.html")
+```
+
+
+## Übung 2: Webscraping / Tidying
+### 1. Klima in Bern
+Mit "read_html" wird der ganze Quellcode eingelesen. Anschliessend muss die die richtige Tabelle aus diesem Code extrahiert werden. Leider hat die Tabelle im HTML-Code keinen eindeutigen Identifikator, deshalb muss mittels Ausprobieren der korrekte Index ermittelt werden: es ist die 6. Mit der doppelten eckigen Klammer erhalten wir das data.frame (statt einer list bei nur einfacher Klammer). Mit dem Parameter "dec" können wir die Temperaturwerte gleich beim Einlesen korrekt mit Dezimalpunkt als Zahlen definieren (statt später per "gsub" und "as.numeric" mühsam umzuwandeln):
+```{r read_table}
+roh.html <- read_html("https://de.wikipedia.org/wiki/Bern")
+temp.bern <- html_table(roh.html, fill = T, header = T, dec = ",")[[6]]
+# damit der Output nicht so hässlich umgebrochen wird, erhöhen wir die Output-Breite:
+old = options(width = 1000)
+temp.bern
+```
+Das sieht noch etwas unordentlich aus, aber es ist die korrekte Tabelle.
+
+### 2. Tidy Tabelle
+Nur die ersten beiden Zeilen sowie die Spalten mit den Monaten (1-13) sollen verwendet werden. Zusätzlich geben wir der ersten Spalte noch einen Namen, damit sie besser ansprechbar ist; für die anderen Spalten können wir die bestehenden Namen wiederverwenden:
+```{r tidy_table_prep}
+temp.bern <- temp.bern[1:2,1:13]
+names(temp.bern) <- c("Merkmal", names(temp.bern)[2:13])
+temp.bern
+```
+
+Mit der "melt"-Funktion werden nun die Monatsspalten zuerst in einzelne Zeilen transponiert:
+```{r tidy_table_melt}
+temp.melt <- melt(temp.bern, id = "Merkmal")
+head(temp.melt)
+```
+Nun sind alle Monatsspalten als Zeilen in die Spalte "variable" transformiert worden.
+
+Zum Schluss wird mit "dcast" je eine Spalte für Maximal- und Minimal-Temperatur erzeugt. Nach einer Spaltenumbenennung wird mit "kable" aus dem knitr-Paket eine hübsche Texttabelle erzeugt, wo auch die Zahlen in einer Kolonne rechts ausgerichtet werden können. Gemäss Aufgabenstellung sollen die Temperaturen 3 Nachkommastellen haben, dies wird mit dem Parameter "nsmall" erreicht:
+```{r tidy_table_finish}
+temp.tidy <- dcast(temp.melt, ... ~ Merkmal)
+names(temp.tidy) <- c("Monat", "Max", "Min")
+kable(temp.tidy,
+      row.names = T,
+      align = c("c","r","r"),
+      caption = "Durchschnittliche Temperaturminima und -maxima in Bern",
+      format.args = list(nsmall = 3))
+```
+
+```{r option_reset, include=FALSE}
+# Zu guter letzt die Optionen wieder zurücksetzen, das brauchen wir im Output-HTML nicht anzuzeigen:
+options(old)
+```
+

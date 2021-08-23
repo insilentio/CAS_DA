@@ -1,0 +1,479 @@
+---
+title: "Übung 1"
+output: 
+  html_document: 
+    toc: yes
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(ggplot2)
+library(e1071)
+library(moments)
+autos <- read_excel("Uebung_1_Gebrauchtautos.xlsx")
+old.options <- options(digits = 3)
+```
+
+  
+#### 1. Geben Sie für die folgenden Merkmale das jeweilige Skalenniveau und mögliche Merkmal- ausprägungen. Unterscheiden Sie die Merkmale ferner in diskrete und stetige und diskutieren Sie dabei Probleme der Messgenauigkeit.
+
+| Merkmal | Ausprägungen | Skalenniveau | diskret |
+|-------|------|------|------|
+|Gewicht|5kg, 4t, 3ng|metrisch|nein|
+|Akademischer Grad|BA, MS, PhD|ordinal|ja|
+|Augenfarbe|blau, grün|nominal|ja|
+|Geschlecht|m, f, u|nominal|ja|
+|Nettoeinkommen in CHF|10kCHF|metrisch|ja|
+
+  
+#### 2. Welche Faktoren bestimmen den Verkaufspreis eines Gebrauchtautos. Welche Vorzeichen erwarten Sie?
+
+Alter, Marke, Grösse, km, Unfallfreiheit  
+-,,+,-,+
+  
+  
+#### 3. Welche sind davon qualitative Faktoren?
+
+Marke
+
+  
+#### 4. Erklären Sie was ein Streudiagramm ist.
+
+Auftragung von zweidimensionalen Daten in einem kartesischen Koordinatensystem: erklärende Variable auf Abszisse, Zielvariable auf Ordinate
+
+  
+#### 5. Erstellen Sie folgende Streudiagramme mit der Variable Preis auf der Ordinate (y-Achse).
+```{r 5}
+#i
+ggplot(autos)+
+  aes(x=Alter, y=Preis)+
+  geom_point()+
+  stat_smooth(method="lm", se=F)
+#ii
+ggplot(autos)+
+  aes(x=KM, y=Preis)+
+  geom_point()+
+  stat_smooth(method="lm", se=F)
+```
+
+
+  
+#### 6. Was sagen diese Streudiagramme über den statistischen Zusammenhang zwischen den Autopreis und den ausgewählten Variablen (Alter, KM) aus?
+Es besteht eine negative Korrelation zwischen km/Alter und Preis.
+
+  
+#### 7. Was ist der Mittelwert für die Variablen Kilometerstand, Preis und Alter von Gebrauchtautos in dieser Stichprobe?
+```{r}
+sapply(autos[,2:4], mean)
+```
+
+  
+#### 8. Interpretieren Sie den Median für die Variable “Kilometerstand“ KM.  
+```{r 8a, include=FALSE}
+options(scipen = 999)
+```
+
+Die Hälfte der Autos hat einen Kilometerstand unter `r median(autos$KM)`, die andere Hälfte liegt darüber.
+```{r 8b, include=FALSE}
+options(scipen = 0)
+```
+
+  
+#### 9. Was ist die Standardabweichung? *
+
+Die durchschnittliche Abweichung von Messpunkten von ihrem arithmetischen Mittel. Sie ist somit ein Mass für die Streuung.
+
+  
+#### 10. Welche wichtige Information gibt die Standardabweichung im Allgemeinen?
+
+Wie gross die Streuung eines Datasets ist.
+
+  
+#### 11. Was ist der Vorteil der Standardabweichung gegenüber der Varianz als Streuungsmass?
+
+Die Standardabweichung hat dieselbe Dimension wie die Messwerte selbst, während die Varianz die Quadrate der Dimensionen besitzt.
+
+  
+#### 12. Welche Variable weist die geringste und höchste Standardabweichung auf?
+
+Was können Sie über die Repräsentativität des Mittelwertes dieser Variablen sagen?
+```{r}
+sapply(autos[,2:4], sd)
+```
+
+Die höchste Streuung hat KM. Der Variationskoeffizient beträgt `r sd(autos$KM)/mean(autos$KM)*100`% des Mittelwerts, womit dieser nicht sehr repräsentativ ist.  
+Die (relativ) kleinste Streuung besitzt der Preis, mit einem Variationskoeffizient von `r sd(autos$Preis)/mean(autos$Preis)*100`% ist der Mittelwert ziemlich repräsentativ.
+
+  
+#### 13. Interpretieren Sie die Standardabweichung für die Variable Alter.
+
+Im Mittel weicht das Alter eines Gebrauchtwagens 1.38a vom Durchschnittsalter von 2.68a ab.
+
+  
+#### 14. Erklären Sie was ein Histogramm ist.
+
+Das Histogramm zeigt in grafischer Form eines Säulendiagramms die Häufigkeitsverteilung eines Datasets, indem die metrischen Werte in Intervalle zusammengefasst werden und auf der Ordinate die Häufigkeit aufgetragen wird.
+
+  
+#### 15. Erstellen Sie das Histogramm für die Variable Autopreis mittels gretl.
+```{r}
+ggplot(autos)+
+  aes(x=Preis)+
+  geom_histogram(bins=7)
+```
+
+  
+#### 16. Welche ist die modale Klasse dieses Histogramms?
+
+Die 4. Klasse (ca. 17-20k) ist die modale Klasse mit 23 Zählungen
+
+  
+#### 17. Erklären Sie was der Korrelationskoeffizient ρ ist*
+
+Ein statistisches Mass für den linearen Zusammenhang von (mind.) 2 Variablen.
+
+  
+#### 18. Was ist der Wertebereich des Korrelationskoeffizienten? Interpretieren Sie die drei Werte ρ = -1, ρ = +1 und ρ = 0. *
+
+Der Wertebereich des Korrelationskoeffizienten ist [-1, 1]. ρ = -1 bedeutet vollständige gegenläufige lineare Korrelation, 0 bedeutet gar keine lineare Korrelation, 1 bedeutet vollständig positive lineare Korrelation.
+
+  
+#### 19. Nennen Sie zwei Hauptvorteile des Korrelationskoeffizienten gegenüber der Kovarianz.*
+
+dimensionslos und relativ, somit ist einfache Vergleichbarkeit gegeben
+gleichzeitig gibt er eine Stärke des Zusammenhangs an
+
+  
+#### 20. Welche Korrelationen erwarten Sie zwischen den Variablen (Preis, Alter, KM)?
+
+negativ zw. Preis~Alter resp. KM~Alter, positiv zw. Alter~KM
+
+  
+#### 21. Analysieren Sie die Korrelation zwischen Preis, KM und Alter mittels gretl. Lassen sich Ihre Erwartungen bestätigen? Welches Variablen-Paar weist die höchste Korrelation auf? Ist dieses Ergebnis plausibel?
+```{r 21}
+cor(autos[,2:4])
+```
+
+
+  
+#### 22. Erklären Sie was der Variationskoeffizient ist.*
+
+Die normierte Standardabweichung, indem diese durch den Mittelwert dividiert wird.
+
+  
+#### 23. Was ist der Vorteil des Variationskoeffizienten gegenüber der Standardabweichung?*
+
+Er ist ein relatives Mass. Somit sind Werte vergleichbar, unabhänging von den Grössenordnungen der Messwerte.
+
+  
+#### 24. Welche Variable weist den grössten Variationskoeffizienten auf? Wie interpretieren Sie diese Zahl?*
+
+KM hat den höchsten Variationskoeffizienten von 0.8. Das bedeutet, dass die Datensätze im Durchschnitt 80% vom Mittelwert um den Erwartungswert streuen.
+
+  
+#### 25. Definieren Sie folgende drei neuen Variablen:
+```{r 25}
+autos$Preis100 <- autos$Preis/100
+autos$PreisUSD <- autos$Preis*1.1
+autos$KM1000 <- autos$KM/1000
+```
+
+  
+#### 26.Vergleichen Sie die Standardabweichungen und Variationskoeffizienten für folgende Gruppenvariablen: (Preis, Preis100, PreisUSD) und (KM, KM1000)
+```{r 26}
+autos.sd <- sapply(autos[,2:7],sd)
+autos.mean <- sapply(autos[,2:7],mean)
+cbind(autos.sd, autos.sd/autos.mean)
+```
+Die Standardabweichungen unterscheiden sich im selben Faktor wie die beobachteten Werte, während der Variationskoeffizient für die jeweilige Gruppe jeweils gleich bleibt.
+
+  
+#### 27. Erklären Sie kurz was ein Box-Plot ist.*
+
+Der Boxplot zeigt grafisch einige wichtige statistische Masszahlen und erlaubt somit eine Beurteilung über die Verteilung von Daten in einer Stichprobe. Er zeigt den Median, das 1. und 3. Quartil (Box), den 1.5fachen Interquartilsabstand in beide Richtungen (Whisker) sowie allfällige Ausreisser.
+
+  
+#### 28. Erstellen Sie einen Box-Plot für die Variable Autopreis mittels gretl. Bestimmen Sie folgende Elemente des Box-Plots: Median, Mittelwert, erste und dritte Quartile und Quartilabstand. Gibt es Ausreisser? *
+```{r 28}
+ggplot(autos)+
+  aes(x="",y=Preis)+
+  geom_boxplot(color="blue")+
+  geom_point(aes(y=mean(Preis)), shape=3, color="green")
+```
+  
+* Die untere bzw. obere Grenze der Box ist durch das untere bzw. obere _____gegeben.
+* Die Länge der Box entspricht _______________________ und berechnet sich als _______
+* Die Linie innerhalb der Box gibt die Lage __________ wieder.
+* Das grüne Kreuz innerhalb der Box entspricht ___________________.
+* An den äusseren Enden werden die ___________ angezeigt. Diese liegen um _______
+* Der untere "adjacent value" ist _________________
+* Der Punkt oberhalb der Box entspricht _______________________.  
+Quartil  
+Interquartilsabstand: 3. Quartil - 1. Quartil  
+des Medians  
+Mittelwert  
+Whisker: 1.5xIQR vom oberen resp unteren Quartil entfernt.  
+??  
+Ausreisser  
+
+  
+#### 29. Erklären Sie was die Schiefe ist.*
+
+Kennzahl, welche die Asymmetrie einer Wahrscheinlichkeitsverteilung beschreibt. Bei linksschiefer Verteilung (v < 0) sind mehr Werte grösser als der Mittelwert als kleiner (der Median ist grösser als der Mittelwert).
+
+  
+#### 30. Bei rechtschiefen Verteilungen haben wir die Relation Median < Mittelwert. Prüfen Sie diese Lage für die Variablen Preis, Alter und KM.
+
+Alle Variablen sind rechttschief verteilt, da jeweils v > 0. Eigentlich sollte der Median somit kleiner als der Mittelwert sein; stimmt hier nicht für den Preis.
+
+  
+#### 31. Erklären Sie was die Kurtosis (Wölbung) ist. Wie ist der Exzess definiert?*
+
+Die Kurtosis ist eine Kennzahl für die Steilheit einer Wahrscheinlichkeitsverteilung.  
+Der Exzess beschreibt die Wölbung im Vergleich zu einer Normalverteilung: Wölbung der Daten - Wölbung der Normalverteilung (=3).
+
+  
+#### 32. Interpretieren Sie die Wölbung und Kurtosis für die Variable Preis.
+```{r 32}
+autos<-data.frame(autos[,2:7])
+e1071::kurtosis(autos$Preis)
+```
+
+Mit einem Exzess > 0 ist die Verteilung der Preisdaten steiler als diejenige der Normalverteilung.
+
+  
+#### 33. Vergleichen Sie die Wölbung und Kurtosis für folgende Gruppenvariablen: (Preis, Preis100, PreisUSD) und (KM, KM1000). Ändern sich diese Parameter für eine lineare Transformation der Variablen?
+
+Nein. Die Skalierung ist völlig irrelevant, die Wölbung ist ein normiertes Mass. 
+
+  
+#### 34.Schätzen Sie folgende Regressionsmodelle
+
+Modell 1: Preis = β1 + β2Alter + u
+Modell 2: Preis = β1 + β2Alter + β3Km + u
+```{r 34, results='hold'}
+options(scipen = 999)
+mod1 <- lm(Preis~Alter, data=autos)
+mod2 <- lm(Preis~Alter+KM, data=autos)
+summary(mod1)
+summary(mod2)
+options(scipen=0)
+```
+
+
+  
+#### 35.Für was steht der Störterm u in einem Regressionsmodell? Warum sind die Regressions- koeffizienten mit griechischen Buchstaben bezeichnet?*
+
+Für den Einfluss jener Faktoren auf die Zielgrösse, die im Regressionsmodell nicht berücksichtigt werden (können).  
+Griechische Buchstaben zeigen, dass auf die Grundgesamtheit und nicht auf die Stichprobe Bezug genommen wird.
+
+  
+#### 36. Interpretieren Sie den Regressionskoeffizienten bAlter für beide Modelle.
+
+1. Der mittlere Preis eines Gebrauchtwagens nimmt pro Jahr um 2758.- ab.
+2. Der mittlere Preis eines Gebrauchtwagens nimmt pro Jahr um 2203.- ceteris paribus ab, d.h. wenn andere Faktoren (KM) konstant bleiben.
+
+  
+#### 37. Warum ist ein Unterschied für den Schätzer b2 zwischen beiden Modellen zu vermerken?*
+
+Weil im zweiten Modell der Preis nicht nur durch das Alter, sondern auch durch den zweiten Faktor km erklärt werden kann.
+
+  
+#### 38. Interpretieren Sie den Regressionskoeffizienten bKM im Modell 2.
+
+2. Der mittlere Preis eines Gebrauchtwagens und nimmt pro gefahrenen km um 0.02 CHF, ceteris paribus, ab.
+Achtung: man kann nicht aussagen, dass er pro 100'000km um 2150.- abnimmt, da man immer von marginalen Faktoren ausgeht!!
+
+
+  
+#### 39. Sind die Regressionskoeffizienten im Modell 2 statistisch signifikant? Betrachten Sie dabei jeweils die Sternen, die t-Werte und p-Werte.
+
+Beide Koeffizienten sind statistisch signifikant: Alter sehr hoch, aber auch km mit einem p-Wert 0.3% deutlich unter dem üblichen Niveau von 5%.
+t-Werte??
+
+  
+#### 40. Interpretieren Sie den p-Wert für die Variable KM
+
+Die Wahrscheinlichkeit, dass der Einfluss der km auf den Preis zufällig ist, beträgt nur 0.3% ??
+
+  
+#### 41. Ermitteln Sie den erwarteten Preis eines Gebrauchtautos mit einem Alter von 4 Jahren und 50‘000 Km.
+```{r 41}
+predict(mod2, newdata = data.frame(Alter=4,KM=50000))
+```
+
+
+  
+#### 42. Schätzen Sie das neue Modell 3: Preis = β* + β* Alter + β* KM1000 + u*
+```{r}
+mod3 <- lm(Preis~Alter+KM1000, data=autos)
+summary(mod3)
+```
+
+
+  
+#### 43. Interpretieren Sie den Koeffizienten b3 im Modell 3.
+
+Da die zugrundeliegende Skala um den Faktor 1000 sich unterscheidet, ist auch der Regressionsfaktor 1000 mal grösser. Die Aussage ist nun einfach: pro zusätzliche 1000km nimmt der durchschnittliche Preis um 21.50 ceteris paribus ab.
+
+  
+#### 44. Prüfen Sie den Zusammenhang zwischen b3 (Modell 2) und b*3 (Modell3).
+
+? siehe 43
+
+  
+#### 45. Schätzen Sie das neue Modell 4: Preis100 = β* + β* Alter + β* KM + u* 123
+```{r 45}
+mod4 <- lm(Preis100~Alter+KM, data=autos)
+summary(mod4)
+```
+
+
+  
+#### 46. Interpretieren Sie die Koeffizienten bAlter und bKM im Modell 4.
+  
+Pro zusätzliches Jahr nimmt der durchschnittliche Preis in 100.- eines Autos um 22.03 Einheiten ab ceteris paribus.
+Pro zusätzlichen km nimmt der durchschnittliche Preis in 100.- eines Autos um 0.0002 Einheiten ab ceteris paribus.
+
+  
+#### 47. Prüfen Sie den Zusammenhang zwischen bi und b*i für i = 1, 2,3 (Modell 2 vs Modell 4).
+
+Alle Koeffizienten sind im Modell 4 um den Faktor 100 kleiner (entsprechend der hundertfachen Einheit der Zielgrösse).
+
+  
+#### 48. Schätzen Sie das neue Modell 5: PreisUSD = β* + β* Alter + β* KM + u*
+```{r 48}
+mod5 <- lm(PreisUSD~Alter+KM, data=autos)
+summary(mod5)
+```
+
+
+  
+#### 49. Prüfen Sie den Zusammenhang zwischen bi (Modell 2) und b*i (Modell 5) für i = 1, 2,3.
+```{r 49}
+mod5$coefficients/mod2$coefficients
+```
+
+Die Koeffizienten unterscheiden sich entsprechend der Zielvariablen um den Faktor 1.1
+
+  
+#### 50. Schätzen Sie das neue Modell 6: Preis100 = β′ + β′ Alter + β′ KM1000 + u‘
+```{r 50}
+mod6 <- lm(Preis100~Alter+KM1000, data=autos)
+summary(mod6)
+```
+
+  
+#### 51. Interpretieren Sie den Regressionskoeffizienten b′.
+
+Pro 1000 gefahrenen km nimmt der Preis in 100.- um 0.215 Einheiten ab (i.e. 100*0.215=`r 100*0.215` CHF).
+
+  
+#### 52. Prüfen Sie den Zusammenhang zwischen bi und b′ für i = 1,2,3. (Modell 1 vs Modell 5)
+
+Annahme: gemeint ist zw. Modell 2 und Modell 6.
+```{r 52}
+mod6$coefficients/mod2$coefficients
+```
+b~1~ und b~2~ betragen im Modell 6 jeweils 1/100, aufgrund der 100fachen Einheit der Zielvariable.
+b~3~ beträgt das 10-fache, aufgrund der 100fachen Einheit der Zielvariablen und der 1/1000fachen Einheit der erklärenden Variablen.
+
+  
+#### 53. Erklären Sie was das Bestimmtheitsmass ist.*
+
+Das Bestimmtheitsmass ist eine Gütekennzahl für die lineare Regression und erklärt, wieviel der Streuung der Zielvariablen durch das Modell erklärt werden kann. 
+
+  
+#### 54. Interpretieren Sie das Bestimmtheitsmass für beide Extremwerte R2 = 0 und R2 = 1. Was ist die Implikation für die RSS und ESS?*
+
+R^2^ = 0: es besteht kein linearer Zusammenhang. Die nicht erklärte Streuung RSS ist auch die TSS, die erklärte Streuung ESS ist 0. Die Regressionskoeffizienten betragen 0.  
+R^2^ = 1: es besteht ein vollkommener linearer Zusammenhang. Die nicht erklärte Streuung RSS ist 0, die erklärte Streuung ESS ist gleich der TSS. Alle Punkte liegen auf der Regressionsgerade, die Residuen sind 0.
+
+  
+#### 55. Interpretieren Sie das Bestimmtheitsmass für Modell 2. Weist dieses Modell eine gute Anpassungsgüte auf?
+
+Mit einem Bestimmtheitsmass von `r summary(mod2)$r.squared` liegt das Modell nahe beim idealen Wert von 1. Die Anpassungsgüte ist hoch.
+
+  
+#### 56. Prüfen Sie die Relation für die Zweifachregression (Modell 2):R2 =r2
+```{r 56, results='hold'}
+cor(autos$Preis,mod2$fitted.values)
+sqrt(summary(mod2)$r.squared)
+```
+Die Werte sind gleich.
+
+  
+#### 57. Prüfen Sie die Relation für die Einfachregression (Modell 1): rxy = ± R2
+```{r 57, results='hold'}
+cor(autos$Preis,autos$Alter)
+sqrt(summary(mod1)$r.squared)
+```
+Die Werte sind im absoluten Betrag gleich.
+
+  
+#### 58. Welche Grenzen besitzt das Bestimmtheitsmass? Nennen Sie drei Kritikpunkte.*
+
+Mathematische Grenzen: [0, 1]  
+* Hohes R^2^ bedeutet nicht, dass Vorhersagen sehr zuverlässig sind.  
+* R^2^ kann durch Hinzufügen weiterer Regressoren nicht kleiner werden.  
+* Keine Angabe, ob das Modell fehlspezifiziert ist oder nicht.  
+
+  
+#### 59. Hat sich das Bestimmtheitsmass für die verschiedenen Skalierungen geändert?
+
+Nein
+
+  
+#### 60. Vergleichen Sie die adjustierten R2-Werte für beide Modelle 1 und 2. Welches Modell würden Sie anhand dieses Kriteriums vorziehen?
+
+Modell 2
+
+  
+#### 61. Erklären Sie kurz warum R2 durch das Hinzufügen eines weiteren Regressors nicht geringer wird.*
+
+Die Regressionsgerade und damit die ESS bleibt durch das Hinzufügen eines weiteren Regressors im schlimmsten Fall gleich oder wird besser. Sie kann nicht schlechter werden.
+
+  
+#### 62. Was ist der Vorteil des adjustierten R 2 gegenüber R2?*
+
+Der adjusted R^2^ kompensiert das Manko von Punkt 61 und erlaubt bei mehreren Regressoren eine bessere Beurteilung der Güte des Modells.
+
+  
+#### 63. Erklären Sie kurz was der Strafterm ist und wie er funktioniert.*
+
+??
+
+  
+#### 64. Erstellen Sie den Residuengraph für Regressionsmodell 2:
+```{r 64, results='hold'}
+plot(mod2$residuals)
+plot(x=autos$Alter, y=mod2$residuals)
+plot(x=autos$Preis, y=mod2$residuals)
+```
+
+
+  
+#### 65. Erklären Sie kurz was ein QQ-Plot (Quantil-Quantil Plot) ist.*
+
+Stellt die Werte einer Verteilung den Werten einer Normalverteilung gegenüber.
+
+  
+#### 66. Erstellen Sie ein QQ-Plot
+```{r 66}
+plot(mod2, 2)
+```
+
+
+  
+#### 67. Testen Sie die Normalität der Residuen des Modells 2.
+```{r 67}
+jarque.test(mod2$residuals)
+```
+
+Da p-Wert < α, muss H~0~ verworfen werden: die Residuen sind nicht normalverteilt.
+  
+#### 68. Welche Kritik können Sie an diesem Model üben?
+
+Die beiden Faktoren allein reichen nicht aus, um den Preis genug gut zu erklären. Dazu müssten die Residuen normalverteilt sein.

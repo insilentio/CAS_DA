@@ -1,0 +1,230 @@
+---
+title: "Übung 3"
+output: 
+  html_document: 
+    toc: yes
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(dplyr)
+```
+
+#### 1. Erklären Sie im Allgemeinen was Substitute (Substitutionsgüter) sind? Geben Sie ein Beispiel dazu.
+
+Das sind Güter, welche gekauft werden anstelle eines eigentlich anderen, begehrteren Guts, falls dieses zu teuer ist. Normalerweise sind sie dem begehrten Gut sehr ähnlich. Beispiel: wenn der Preis eines iPhone steigt, werden mehr Menschen ein Huawei als Substitutions-Handy kaufen.
+
+#### 2. Erklären Sie warum der Nelkenpreis einen Einfluss auf den Rosenabsatz hat und deshalb im Modell als Regressor aufgenommen werden sollte.
+
+Weil Nelken ein Substitutionsgut für Rosen sind. Wir erwarten, dass der Rosenabsatz sinkt, wenn der Nelkenpreis sinkt.
+
+#### 3. Importieren Sie die Daten aus der Excel-Datei, Tabellenblatt „Übung 3_Rosennachfrage.xls“.
+```{r 3}
+rosen <- read_excel("Übung 3.xls", sheet = "Data", skip = 9)
+```
+
+
+#### 4. Ändern Sie die Namen der Regressoren, um deren Interpretation zu erleichtern.
+```{r 4}
+rosen <- rosen %>% 
+  rename(PR=X2,PN=X3,EINK=X4,T=X5)
+series <- ts(rosen[2:6],start = c(1971,3), frequency = 4)
+```
+
+
+#### 5. Welche Korrelationsstruktur existiert zwischen Rosenabsatz, Rosenpreis und Nelkenpreis? Was stellen Sie fest?
+```{r}
+cor(series[,1:3])
+cor(rosen[,2:4])
+```
+Negative Korrelation zw. Rosenabsatz und Rosen- sowie Nelkenpreis. Positive Korrelation zw. Rosen und Nelkenpreis.
+
+#### 6. Betrachten Sie die Entwicklung des Rosenabsatzes und des Rosenpreises im Zeitverlauf.
+```{r 6}
+plot(series[,1:2], col="red")
+```
+Gegenläufige Entwicklung: wenn der Preis steigt, sinkt der Absatz. Der steigende Preis dürfte (falls real bereinigt) mit sinkender Produktionsmenge zusammenhängen.
+
+#### 7. Erklären Sie was ein relativer Preis im Allgemeinen ist. Interpretieren Sie konkret einen Anstieg des relativen Preises PR/PN.
+
+Der Preis eines Guts im Verhältnis zum Preis des Substitutionsguts. Anstieg PR/PN bedeutet dass sich der Preis von Rosen im Verhältnis zum Preis von Nelken verteuert.
+
+#### 8. Definieren Sie folgende neue Variable: RelP= PR / PN
+```{r 8}
+rosen$RelP <- rosen$PR/rosen$PN
+series <- ts(rosen[2:7],start = c(1971,3), frequency = 4)
+```
+
+
+#### 9. Erstellen Sie ein Streudiagramm des Rosenabsatzes gegen den relativen Preis (RelP). Was stellen Sie fest?
+```{r 9}
+library(ggplot2)
+ggplot(rosen)+
+  aes(x=RelP,y=Y)+
+  geom_point()+
+  stat_smooth(method = "lm", se=F)
+```
+leicht negative Korrelation
+
+#### 10. Durch Diskussionen mit anderen CAS-Teilnehmern haben Sie folgende Regressionsmodelle gesammelt:
+1. Modell1:yt =β1 +β2PRt +β3PNt +ut  
+2. Modell2:yt =β1 +β2(PRt /PNt)+ut  
+3. Modell3:yt =β1 +β2PRt +β3PNt +β4EINKt +ut  
+4. Modell4:yt =β1 +β2PRt +β3PNt +β4EINKt +β5T+ut  
+Es gelte ut ~ iid N(0;σ2) . iid: independent and identically distributed (unabhängig identisch verteilten Zufallsvariablen)  
+Welche Vorzeichen für die Regressionskoeffizienten erwarten Sie für das Modell 4?
+Rosenpreis: -  
+Nelkenpreis: +  
+Einkommen: +  
+Zeit: +  
+
+
+#### 11. Schätzen Sie die Regressionsmodelle 1-4.
+```{r 11}
+mod1 <- lm(Y~PR+PN, rosen)
+smod1 <- summary(mod1)
+mod2 <- lm(Y~RelP, rosen)
+smod2 <- summary(mod2)
+mod3 <- lm(Y~PR+PN+EINK, rosen)
+smod3 <- summary(mod3)
+mod4 <- lm(Y~PR+PN+EINK+T, rosen)
+smod4 <- summary(mod4)
+smod1
+smod2
+smod3
+smod4
+```
+
+
+#### 12. Interpretieren Sie die Regressionskoeffizienten des Regressionsmodells 4 und beurteilen Sie, ob die Parameterschätzungen plausibel sind.
+
+Das Interzept beträgt `smod4$coefficients[1]*12` verkaufte Rosen.  
+Pro $ Preiserhöhung für ein Dutzend Rosen sinkt der Absatz durchschnittlich um `r smod4$coefficients[2]` Dutzend, ceteris paribus.  
+Pro $ Preiserhöhung für ein Dutzend Nelken steigt der Absatz durchschnittlich um `r smod4$coefficients[3]` Dutzend, ceteris paribus.  
+Pro $ Haushaltseinkommen/Woche steigt der Absatz durchschnittlich um `r smod4$coefficients[3]` Dutzend, ceteris paribus.  
+Pro Quartal sinkt der Absatz um durchschnittlich `r smod4$coefficients[4]` Dutzend, ceteris paribus.  
+Die Werte erscheinen vom Vorzeichen plausibel, mal von der Zeitkomponente abgesehen.
+
+#### 13. Sind die Koeffizienten des Modells 4 statistisch signifikant auf 5%-Niveau?
+
+Nur für den Rosenpreis.
+
+#### 14. Analysieren Sie für die Modelle 1 und 4, ob Ausreisser, Hebelwirkungspunkte und einflussreiche Datenpunkte vorhanden sind.
+
+```{r 14}
+#Schranke DFFITS
+N=16
+K=3
+2*sqrt((K-1)/(N-K-1))
+influence.measures(mod1)
+
+N<- 16
+K<- 5
+2*sqrt((K-1)/(N-K-1))
+influence.measures(mod4)
+```
+
+
+#### 15. Was könnte der Grund dafür sein, dass die erklärenden Variablen Nelkenpreis (b3) und Einkommen (b4) nicht statistisch signifikant sind?
+
+Nelken sind nicht für alle Konsumenten ein Substitutionsgut. Weitere Substitutionsgüter sind zudem möglich.  
+Stichprobe ist zu klein.  
+
+
+#### 16. Berechnen Sie den Standardfehler des Regressionsmodells 4. Wo sehen Sie diese Zahl im gretl Output-Fenster?
+
+Summe der quadrierten Residuen (residuale Variation) dividiert durch (N-K) ergibt die Varianz.
+```{r}
+
+smod4$sigma
+```
+
+
+#### 17. Welches lineare Regressionsmodell würden Sie auswählen. Begründen Sie Ihre Auswahl.
+```{r 17, results='hold'}
+mods <- list(mod1,mod2,mod3,mod4)
+sapply(mods,AIC)
+sapply(mods,BIC)
+```
+Modell 2, da hier sowohl Akaike- als auch Schwarz-Informationkriterium am tiefsten sind. Auch hat es den zweithöchsten R^2^ Wert.  
+
+
+#### 18. Erklären Sie was das Ziel eines F-Tests für eine Mehrfachregression ist. Sie wollen jetzt das Regressionsmodell 4 mittels F-Test prüfen!
+Damit prüft man, ob die gewählten Regressoren zusammen einen signifikanten Einfluss auf die Zielvariable ausüben. Das Ziel ist es, die Nullhypothese, dass alle Regressoren gleichzeitig 0 sind, zu verwerfen.  
+
+
+#### 19. Stellen Sie die Nullhypothese und alternative Hypothese auf.
+
+H~0~: b2=b3=b3=b5=0, H~1~: b2≠0 && b3≠0 && b4≠0 && b5≠0 ??
+
+#### 20. Bestimmen Sie den kritischen F-Wert (Fc) auf dem 5%-Signifikanzniveau mittels gretl.
+```{r 20}
+n = nrow(rosen)
+k = nrow(smod4$coefficients)
+qf(.05,k-1,n-k,lower.tail = F)
+```
+
+
+#### 21. Berechnen Sie den F-Test mittels Bestimmtheitsmass F = R^2^/(1-R^2^)*(N − k)/(K - 1)
+```{r 21}
+smod4$r.squared/(1-smod4$r.squared)*(n-k)/(k-1)
+smod4$fstatistic
+```
+
+
+#### 22. Wie lautet die Entscheidungsregel, auf deren Basis Sie Ihre Testentscheidung treffen?
+
+Wenn der F-Wert > kritischer Wert, wird die Nullhypothese verworfen.
+
+#### 23. Wie lautet die Entscheidungsregel mit dem p-Wert?
+
+Falls p < α, wird die Nullhypothese verworfen, i.e. die Regressoren haben zusammen einen Einfluss.
+
+#### 24. Öffnen Sie das Varianzanalyse-Fenster im gretl. Welche Formel wurde benutzt, um den F-Wert zu berechnen?
+```{r 24, results='hold'}
+a <- anova(mod4)
+a
+mean(a[1:4,3])/a[5,3]
+```
+Quadratisches Mittel der der Regression dividiert durch quadratisches Mittel der Residuen.  
+
+#### 25. Schätzen Sie das restringierte Modell (Nullhypothesenmodell) um RSS~r~ zu bestimmen.
+```{r 25}
+#mod0 <- lm(Y~, rosen)
+```
+
+
+#### 26. Berechnen Sie den F-Test mittels Formel: F = (RSS~r~ RSS)/RSS * (N - K)/(K - 1)
+
+
+#### 27. Erklären Sie die Intuition hinter dieser Formel
+
+
+#### 28. Testen Sie die Nullhypothese H0: b3 = b4 = 0 im Modell 4. Benutzen Sie dazu den eingebauten gretl -Test „Weglassen der Variablen“. Was ist Ihre Schlussfolgerung?
+
+
+#### 29. Interpretieren Sie konkret folgende Restriktion im Modell 4: β2 = -β3
+
+
+#### 30. Schreiben Sie diese Restriktion in Matrixform.
+
+
+#### 31. Testen Sie anhand des t-Tests auf dem 5%-Signifikanzniveau, ob die Restriktion falsch ist.
+
+
+#### 32. Stellen Sie das restringierte Modell auf und schätzen Sie es.
+
+
+#### 33. Testen Sie die Restriktion anhand des t-Tests
+
+
+#### 34. Testen Sie anhand des F-Tests auf dem 5%-Signifikanzniveau, ob die Restriktion falsch ist. Berechnen Sie den F-Wert mittels F = (RSS~r~ RSS)/RSS * (N - K)/(K - 1)
+
+
+#### 35. Testen Sie diese Restriktion mittels gretl.
+
+
+#### 36. Testen Sie im Regressionsmodel 4, ob die Variablen PN, EINK und T gemeinsam statistisch signifikant sind.
+

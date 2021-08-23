@@ -1,0 +1,676 @@
+---
+title: 'Statistik und Testing: Mitschreibskript'
+output:
+  html_document:
+    toc: yes
+  html_notebook:
+    toc: yes
+---
+```{r libraries}
+library(MASS)
+library(ineq)
+library(readxl)
+library(e1071)
+library(TeachingDemos)
+library(moments)
+library(car)
+library(animation)
+```
+
+
+
+## 2017-04-27
+Einführung R, library MASS, Häufigkeitsverteilung
+```{r}
+vari = 1
+vari = 2
+data()
+head(AirPassengers)
+?AirPassengers
+?cars
+head(mtcars)
+mtcars[2,3]
+str(mtcars)
+mtcars[,3]
+verbrauch = mtcars[,1]
+mean(verbrauch)
+median(verbrauch)
+str(Titanic)
+
+head(painters)
+tail(painters, 3)
+painters$School
+# Häufigkeitsverteilung
+table(painters$School)
+freq = table(painters$School)
+cbind(freq)
+# Relative Häufigkeitsverteilung
+relfreq = freq/nrow(painters)
+relfreq
+options(digits = 2)
+relfreq
+# Balkendiagramm
+?barplot
+farben = c("red", "green", "blue", "pink", "yellow", "orange", "violet", "black")
+freq
+barplot(freq)
+pie(freq)
+barplot(freq, col = farben)
+# Gruppenstatistik
+mean(painters$Composition)
+c_school = painters$School == "C"
+c_school
+painters[c_school,]
+mean(painters[c_school,]$Composition)
+tapply(painters$Composition, painters$School, mean)
+```
+
+## 2017-05-04
+Fakultät, Binomialkoeffizient, prop.table, boxplot, barplot
+```{r}
+## Fakultät
+factorial(7)
+
+## Binomialkoeffizient
+choose(12,7)
+
+#Häufigkeiten
+load("Daten_WachstumX.RData")
+#View(Daten_Wachstum)
+
+#zweidimensionale Häufigkeitsverteilung
+##Geschlecht mit Branche in Beziehung bringen:
+t1 = table(Daten_Wachstum$Geschlecht, Daten_Wachstum$Branche)
+## --> liefert noch keine Randhäufigkeiten, deshalb:
+addmargins(t1)
+## transformatin in relative Häufigkeiten
+addmargins(prop.table(t1))
+##mit bedingter Häufigkeit auf das zweite Merkmal:
+addmargins(prop.table(t1,2))
+
+##um die Umgebung fix auf einen bestimmten dataframe zu setzen (statt immer data_frame$xyz):
+attach(Daten_Wachstum)
+Alter
+detach(Daten_Wachstum)
+
+boxplot(Daten_Wachstum$Alter, subset = Daten_Wachstum$Geschlecht == "Mann")
+boxplot(Alter~Geschlecht, data = Daten_Wachstum)
+
+mean(faithful$eruptions)
+median(faithful$eruptions)
+quantile(faithful$eruptions)
+boxplot(faithful$eruptions, horizontal = T)
+barplot(quantile(faithful$eruptions, seq(0,1,.01)))
+barplot(sort(faithful$eruptions))
+```
+
+## 2017-05-11
+barplot, hist, Gini, Cramer V
+```{r}
+head(faithful)
+str(faithful)
+
+barplot(sort(faithful$eruptions))
+
+#Histogramm wäre nun praktisch, da die Werte kaum je genau gleich sind --> somit Intervalle von Werten bilden
+#Finde erst mal Wertebereich:
+range(faithful$eruptions)
+#Entscheidung: Einteilung in 0.5er Intervalle beginnend bei 1.5
+inter = seq(1.5, 5.5, 0.25)
+freq = table(cut(faithful$eruptions, inter , right = FALSE))
+relFreq = prop.table(freq)
+barplot(relFreq) #nicht ideale Darstellung für Histogramme, da Zwischenräume
+#kumulierte rel. Summenhäufigkeit:
+cumRelFreq = cumsum(relFreq)
+cbind(freq,relFreq,cumRelFreq)
+
+#einfacher ist es mit der Funktion hist:
+hist(faithful$eruptions, inter, right = FALSE, main = "Faithful Eruptions", col = rainbow(length(inter)))
+
+#Faustregel: Anzahl Intervalle ca. gleich Wurzel der Werte:
+hist(faithful$eruptions, breaks = sqrt(length(faithful$eruptions)), right = FALSE, main = "Faithful Eruptions",
+     col = rainbow(length(inter)), xlab = "eruption length",
+     xlim = (c(floor(min(faithful$eruptions)), ceiling(max(faithful$eruptions)))))
+
+#Streudiagramm: (kumulierte Häufigkeitsverteilungskurve)
+cumRelFreq0 = c(0, cumRelFreq)
+plot(inter, cumRelFreq0)
+#mit Linien:
+lines(inter, cumRelFreq0)
+
+#oder viel einfacher:
+fn = ecdf(faithful$eruptions)  #dies erzeugt eine Funktion, siehe global environment
+plot(fn)
+
+plot(faithful$eruptions,faithful$waiting)
+#es ist offensichlich eine lineare Regression vorhanden:
+abline((lm(faithful$waiting~faithful$eruptions)))
+
+
+#### Lorenzkurven&Gini-Koeffizient ####
+einkommen = 1000*c(1,1,1,3,4)
+#install.packages("ineq")
+
+plot(Lc(einkommen))
+
+Gini(einkommen)   #dies ist der Ginikoeffizient gegenüber der Maximalfläche (0.5) -> stimmt nur bei sehr grossen Stichproben
+Gini(einkommen, corr = TRUE) #dies ist der Koeffizient bei endlichen Stichproben
+
+
+#### Cramers V ####
+studis = matrix(c(110,120,20,30,20,90,60,30,10,10), nrow = 2, byrow = TRUE)
+colnames(studis) = c("BWL", "SOZ", "VWL", "SoWi", "Stat")
+rownames(studis) = c("F", "M")
+studis
+chisq.test(studis)$statistic
+V = sqrt(chisq.test(studis)$statistic[[1]]/(sum(studis)*(min(dim(studis))-1)))
+V
+```
+
+
+## 2017-05-18
+Chi-Quadrat, Kovarianz, Korrelation, lineares Modell, Bestimmtheitsmass 
+```{r}
+m = matrix(c(21, 46, 55, 35, 28, 1850, 2500, 2560, 2230, 1800), nrow = 2, byrow = TRUE)
+chisq.test(m)$statistic
+cov(m[1,], m[2,])##Achtung: Stichproben-Kovarianz
+cov(m[1,], m[2,])*4/5  #das wäre die Populations-Kovarianz
+cov(m[1,],m[2,])/(sd(m[1,])*sd(m[2,]))
+#resp. direkt:
+cor(m[1,],m[2,], method = "p") #nach Pearson
+plot(m[1,], m[2,])
+
+# Steigung der Regressionsgeraden
+cov(m[1,],m[2,])/sd(m[1,])^2
+
+# stattdessen lineares Modell:
+mod = lm(m[2,] ~ m[1,])
+attributes(mod)
+mod$coefficients[2]
+abline(mod)
+# Bestimmtheitsmass:
+summary(mod)$r.squared
+
+
+m = matrix(c(10^1,10^1,10^5,10^5,10^4,10^2,10^2,10^2,10^5,10^4,10^4,10^3), nrow = 2, byrow = TRUE)
+cor(m[1,], m[2,], method = "spearman")
+cor(m[1,], m[2,])
+
+#finde zugehörigen Wert für einen bestimmten Max-Wert:
+
+faithful[faithful$waiting==max(faithful$waiting),]
+#oder mit which() (aber obere Variante mit logischem Vektor ist eleganter):
+faithful[which(faithful$waiting==max(faithful$waiting)),]
+
+```
+
+
+## 2017-05-24
+Binomialverteilung, Poissonverteilung
+```{r}
+?dbinom
+
+dbinom(4, 12, .2)  # density (Häufigkeit) für ein einzelnes Element
+#Aufgabe Binomialverteilung: max. 4 richtige aus 12 Aufgaben mit je 5 mult.choice
+dbinom(0,12,.2) + dbinom(1,12,.2) + dbinom(2,12,.2)+ dbinom(3,12,.2) +dbinom(4,12,.2)
+#oder viel eleganter:
+pbinom(4,12,.2)
+
+#barplot für alle Eintretenshäufigkeiten 
+yprob = dbinom(0:12,12,.2)
+names(yprob) = 0:12
+barplot(yprob)
+
+#Wahrscheinlichkeit, mindestens 7 richtig zu haben:
+1 - pbinom(6,12,.2)
+pbinom(6,12,.2,lower.tail = F)
+
+
+#Aufgabe hypergeometrische Verteilung:
+lotto = dhyper(0:6,6,36,6)
+names(lotto) = 0:6
+barplot(lotto)
+#Wahrscheinlichkeit, etwas zu gewinnen (3 und mehr Treffer)
+1 - phyper(2,6,36,6)
+
+#Aufgabe Poisson-Verteilung
+1- ppois(17,12)
+#oder, gleichbedeutend:
+ppois(17,12,lower.tail = F)
+barplot(dpois(0:30,12),names.arg = 0:30)
+
+#Lieblingsaufgabe
+240/.96
+dbinom(241,250,.96)
+pbinom(240,250,.96,lower.tail = F)
+Ppass = dbinom(241:250,250,.96)
+Kosten = 1:10*350
+Eintreten = Ppass * Kosten
+sum(Eintreten)
+
+dbinom(241,250,.96)
+# Versuch einer eigenen Lösung mit Funktion für das Optimum
+optimum <- function(over, size, showup, cost, rev) {
+  range <- c((size+1):over)
+  value <- c()
+  for (i in 1:(over-size)) {
+  value[i] <- (range[i] - size)*rev - sum(dbinom(c((size+1):range[i]),range[i],showup)*seq(cost,i*cost,by=cost))
+  }
+  names(value) <- range
+  return(value)
+}
+
+opt <- optimum(270,240,.96,350,210)
+plot(names(opt), opt, type = "o")
+abline(v = as.numeric(names(opt[opt == max(opt)])))
+```
+
+
+## 2017-06-01
+Gleichverteilung, Exponentialverteilung, Normalverteilung, Chi-Quadrat-Verteilung, t-Verteilung, Schiefe und Kurtosis
+```{r}
+#Gleichverteilung
+xv = seq(0,5,length=100)
+plot(xv, dunif(xv,1,3), type = "l") #Dichtefunktion
+
+#10 gleichverteilte Zufallszahlen:
+runif(10,1,3)
+
+dunif(3,1,5) #wie hoch bei Wert 2? (y-Achsenabschnitt)
+punif(3,1,5) #wie viel Fläche --> wie grosse Wahrscheinlichkeit?
+qunif(.95,1,5) #bei welchem Werte ist die Fläche (=Wahrscheinlichkeit) gleich 0.95
+
+#Exponentialverteilung
+plot(xv, dexp(xv,1), type = "l")
+pexp(3,1/3) #nicht intuitiv, da nicht 50%. Stimmt aber, da es auch Exemplare gibt im unendlichen Bereich
+
+#Normalverteilung
+nxv = seq(0,144,by = 1/1000)
+plot(nxv, dnorm(nxv,mean = 72, sd=15.2), type = "l")
+pnorm(84,72,15.2, lower.tail = F)
+barplot(dbinom(0:100,100,.72), names.arg = 0:100)
+
+#Chi-Quadrat Verteilung
+degFreedom = c(3,8,15,30)
+colors = c(1:4)
+plot(nxv, dchisq(nxv,df = 7), type = "l")
+plot.new()
+for (i in 1:4) {
+  lines(nxv, dchisq(nxv, df = degFreedom[i]), col=colors[i], lwd = 2)
+}
+qchisq(.95,7)
+
+#t-Verteilung
+x <- seq(-4, 4, length=100)
+hx <- dnorm(x)
+degf <- c(1, 3, 8, 30)
+colors <- c("red", "blue", "darkgreen", "gold", "black")
+labels <- c("df=1", "df=3", "df=8", "df=30", "normal")
+plot(x, hx, type="l", lty=2, xlab="t-Verteilungen", ylab="Dichte")
+for (i in 1:4){lines(x, dt(x,degf[i]), lwd=2, col=colors[i])}
+legend("topright", inset=.05, title="Verteilungen",
+       labels, lwd=2, lty=c(1, 1, 1, 1, 2), col=colors)
+
+qt(c(.025,.975),5)
+
+
+#Schiefe
+barplot(faithful$eruptions)
+hist(faithful$eruptions)
+mean(faithful$eruptions)
+
+skewness(faithful$eruptions)
+kurtosis(faithful$eruptions)
+```
+
+
+## 2017-06-08
+Verteilungen, Konfidenzintervalle, Stichprobengrössen
+```{r}
+# Beispiel Münze werfen: wo liegen 90% der Würfe
+#exakt: mit Binomialverteilung
+qbinom(c(0.05, 0.95), 100, .5)
+#mit Normalverteilung: mü = 50
+#erst mal Varianz abschätzen (siehe Kap. 2)
+varianz = 100 * .5 * (1 - .5)
+stabw = varianz ^ .5
+qnorm(c(0.05, 0.95), 50, stabw)
+#mit Normalverteilung, aber relative Häufigkeit: mü = 0.5
+mü  = 0.5
+#für die Standardabweichung muss bei relativen Werten durch Wurzel(n) geteilt werden
+#(Standardfehler)!!!
+stdFehler = sqrt(.5 * .5) / sqrt(100)
+qnorm(c(0.05, 0.95), 0.5, sqrt(.5 * .5 / 100))
+
+
+#Beispiel: Reiszählen
+reis = read_excel("ReisFS17.xlsx")
+reis$total = reis$schwarz + reis$weiss
+reis$schaetzer = reis$schwarz / reis$total
+plot(reis$schaetzer)
+reis$se = sqrt(reis$schaetzer * (1 - reis$schaetzer) / reis$total)
+#gesucht: z-wert für 95%
+#z-wert für Standard-Normalverteilung:
+zwert = qnorm(.975)
+reis$me = zwert * reis$se
+reis$LB = reis$schaetzer - reis$me
+reis$UB = reis$schaetzer + reis$me
+plot(reis$schaetzer, ylim = c(min(reis$LB), max(reis$UB)))
+points(reis$UB, col = "red")
+points(reis$LB, col = "blue")
+
+trueValue = sum(reis$schwarz) / sum(reis$total)
+abline(trueValue, 0)
+#--> nur 1 ist ausserhalb des overall Mittelwerts --> entspricht 95% von 18
+
+
+# Folie 29 in CAS_Datenanalyse_R_KonfInt.pdf
+head(survey)
+genderResponse = na.omit((survey$Sex))
+k = sum(genderResponse == "Female")
+n = length(genderResponse)
+schFemale = k / n
+#nun interessiert uns aber das Konfidenzintervall:
+se = sqrt((schFemale * (1 - schFemale)) / n)
+me = qnorm(.975) * se
+schFemale + c(-me, me)
+#stattdessen einfacher:
+prop.test(k, n)
+prop.test(k, n, conf.level = .99)
+
+#Frage: wie gross muss n sein bei vorgegebener Genauigkeit?
+zwert = qnorm(1 - 0.05 / 2)
+ngesucht = (zwert * .5 / .05) ^ 2
+ngesucht
+```
+
+
+## 2017-06-15
+Punktschätzungen mit und ohne StdAbw, Hypothesentest
+```{r}
+#Punktschätzung für Mittelwert der Körpergrösse, mit 95% Konfidenzniveau
+mean(survey$Height, na.rm = T)
+survey.height = na.omit(survey$Height)
+n = length(survey.height)
+sd = 9.48
+se = sd / sqrt(n)
+me = qnorm(.975) * se
+mean(survey.height) + c(-me, me)
+
+z.test(survey.height, sd = 9.48)
+#std.dev. of the sample mean ist hier der Standardfehler (se)
+
+#mit anderem Konfidenzintervall
+z.test(survey.height, sd = 9.48, conf.level = .99)
+
+#nun mit realitätsnäherem Fall: Standardabweichung nicht bekannt
+sd = sd(survey.height)
+se = sd / sqrt(n)
+me = qt(.975, df = n - 1) * se
+mean(survey.height) + c(-me, me)
+t.test(survey.height)
+
+#Stichprobengrösse herausfinden:
+(qnorm(.975)*sd/1.2)^2
+(qnorm(.975)*sd/1.0)^2
+(qnorm(.975)*sd/0.8)^2
+
+#Übung 54 aus dem Buch:
+#siehe OneNote. Hilfsweise könnte man auch mit prop.test arbeiten, aber eigentlich müsste man die Zahl der
+#"weissen" genau wissen
+prop.test(67,100)
+p = .666
+se = sqrt(p*(1-p))/sqrt(800)
+me = qnorm(.975)*se
+p + c(-me,me)
+
+#Übung 67
+n=116
+xq = 25.452
+se = sqrt(0.85)/sqrt(n)
+me = qt(.975, df=n-1)*se
+xq + c(-me,me)
+
+
+#Testen von Hypothesen
+#Cola-Hypothese (siehe OneNote)
+barplot(dbinom(0:12, size = 12, prob = .5),names.arg =  0:12)
+qbinom(.95,12,.5) 
+#--> bei zufälligem Unterscheiden würden in 95% der Fälle max. 9 richtig identifizieren (kritische Grenze)
+pbinom(9,12,.5,lower.tail = F) #Wahrscheinlichkeit für zufälliges Erreichen des Ergebnisses grösser 9
+
+#Apfelernte-Problem
+qnorm(.95,.12, sd=sqrt(0.12*(1-0.12)/214))
+30/214
+#oder via z-wert: muss in Standardnormalverteilung umgerechnet werden
+z = (.15-.12)/sqrt(.12*(1-.12)/214)
+z.alpha = (30/214-.12)/sqrt(.12*(1-.12)/214)
+#p-wert: mit prop.test. parameter "alternative" bezieht sich auf das Gleichheitszeichen vor Alternativhypothese
+prop.test(30,214,p = .12, alternative = "greater", correct = F)
+```
+
+
+## 2017-06-29
+Tests auf Populationsanteile und Mittelwerte
+```{r}
+#linksseitiger TEst des Populationsanteils
+#kritische Grenze z.alpha:
+α <- 0.05
+p0 <- 0.6
+n <- 148
+pquer <- 85/148
+se <- sqrt(p0*(1-p0)/n)
+z <- (pquer - p0)/se
+z.alpha <- qnorm(α)
+z < z.alpha
+
+#da z nicht <z.alpha, kann H0 nicht verworfen werden.
+#Alternative: statt kritischer Grenze wird direkt über p-Wert evaluiert.
+#Hier ist die Entscheidung zur Verwerfung der H0 dann: wenn p < alpha
+p <- pnorm(pquer,p0,se)
+p < α; #ohne Strichpunkt wird nächster Code auch evaluiert
+#oder
+prop.test(x=85, n=148, p = 0.6, alternative = "less", correct = F)
+
+
+#rechtsseitiger Test
+n <- 214
+p0 <- 0.12
+se = sqrt((p0 * (1-p0))/n)
+pquer = 30/214
+p <- pnorm(pquer,p0,se,lower.tail = F)
+p < α;
+#p grösser alpha, daher KEINE Verwerfung der H0
+#oder direkt:
+prop.test(30,214,0.12,alternative = "greater", correct = F)
+
+
+#zweiseitiger TEst
+p0 <- 0.5
+n <- 20
+se <- sqrt(p0*(1-p0)/n)
+pquer <- 12/20
+qnorm(0.025,p0,se) #untere kritische Grenze
+qnorm(0.975,p0,se) #obere kritische Grenze
+#µ ist innerhalb der Grenzen, daher wird H0 NICHT verworfen
+#via p-Wert:
+p <- 2*pnorm(pquer,p0,se,lower.tail = F)
+p < α;
+#oder
+prop.test(12,20,0.5,alternative = "two.sided", correct = F)
+
+
+#linksseitiger Test bei absoluten Zahlen
+xquer <- 9900
+µ0 <- 10000
+n <- 30
+σ <- 120
+se = σ/sqrt(n)
+
+z.alpha <- qnorm(α,µ0,se)
+
+p <- pnorm(xquer,µ0,se)
+p < α;
+#p Wert ist kleiner alpha --> H0 wird verworfen
+z.test(xquer,µ0,σ,alternative = "less",n=n)
+
+
+#rechtsseitiger Test
+xquer <- 2.1
+µ0 <- 2
+n <- 35
+σ <- 0.25
+se <- σ/sqrt(n)
+z.alpha <- qnorm(0.95,µ0,se)
+p <- pnorm(xquer,µ0,se, lower.tail = F)
+p < α;
+
+z.test(xquer,µ0,σ,alternative = "greater",n=n)
+
+
+#zweiseitiger Test
+xquer <- 14.6
+µ0 <- 15.4
+n <- 35
+σ <- 2.5
+se <- σ/sqrt(n)
+p <- 2*pnorm(xquer,µ0,se)
+p < α;
+
+#linksseitiger Test bei unbekannter Standardabweichung
+# H0: µ >= 10000
+xquer <- 9900
+µ0 <- 10000
+n <- 30
+s <- 125
+se <- s/sqrt(n)
+#da qt anders als qnorm nur mit Standardverteilung arbeitet, muss man die z- und p-Werte standardisieren:
+##todo z.alpha <- qt()
+t <- (xquer - µ0)/se
+p <- pt(t, df = n-1)
+p < α;
+#oder mit Daten, dann t-Test:
+daten <- scan("lightbulbs.txt")
+t.test(x=daten, alternative = "less", mu=10000)
+#p-Wert ist kleiner als alpha --> H0 wird verworfen
+#zum Vergleich mit z-Test (der hier konzeptuell falsch wäre)
+z.test(x = daten,10000, sd = sd(daten), n=length(daten), alternative = "less")
+```
+
+
+## 2017-07-06
+gepaarte und ungepaarte Tests, Anpassungs- und Unabhängigkeitstests, Tests auf Normalität,
+lineare Regression, Bestimmtheitsmass
+```{r}
+head(immer)
+
+#gepaarter t-Test
+#ist die Ernte im einen Jahr besser als im anderen?
+#Differenz finden und 95%-Konfidenzintervall bestimmen
+t.test(immer$Y1,immer$Y2, paired = T)
+#p ist kleiner alpha --> H0 wird verworfen
+#Konfidenzintervall beinhaltet die 0 nicht, deshalb kann H0 auch verworfen werden
+
+#ungepaarter t-Test
+#H0: Differenz der Mittelwerte ist 0: µA - µM = 0
+t.test(mtcars[mtcars$am == 0,]$mpg, mtcars[mtcars$am == 1,]$mpg)
+#H0 wird verworfen
+
+#andere Fragestellung: automatisch braucht mehr als manuell (H1), daher:
+#H0: µA - µM >= 0
+#HA: µA - µM < 0
+t.test(mtcars[mtcars$am == 0,]$mpg, mtcars[mtcars$am == 1,]$mpg, alternative = "less")
+#H0 wird verworfen
+
+#das kann auch anders notiert werden in R:
+t.test(mpg ~ am, data = mtcars, alternative = "less")
+#mpg ~ am bedeutet: modelliere mpg (die y-Variable) durch am (die x-Variable)
+
+#höheres Konfidenzniveau:
+t.test(mpg ~ am, data = mtcars, alternative = "less", conf.level = .99)
+#-> H0 wird immer noch verworfen
+
+#dasselbe aber mit Prozenten. Datensatz quine
+head(quine)
+table(quine$Eth,quine$Sex)
+#Frage: ist der Frauenanteil zw. den Ethnien unterschiedlich?
+#mit prop.test:
+#correct = F, da es diskrete und nicht stetige Werte gibt (Anz. Personen)
+#H0: Differenz ist 0
+prop.test(table(quine$Eth,quine$Sex), correct = F)
+#p nicht kleiner alpha, daher kann H0 nicht verworfen werden
+
+
+#Anpassungstests
+head(survey)
+#Chi-Quadrat: Vergleich beobachtete vs. erwartete Häufigkeiten
+#H0: Differenz ist 0 (Rauchverhalten zw. survey und vorherigen Daten hat sich nicht verändert)
+levels(survey$Smoke)
+smoke.freq <- table(survey$Smoke)
+smoke.freq
+smoke.expect <- c(.045,.795, .085, .075)
+#nun Chi-Quadrat Test mit p-Parameter: der enthält die erwarteten Häufigkeiten
+chisq.test(smoke.freq, p=smoke.expect)
+#--> H0 kann nicht verworfen werden
+
+
+#Unabhängigkeitstests
+#Zufallsvariablen x und y
+#H0: beobachtete und erwartete Häufigkeiten sind gleich (--> Variablen sind unabhängig)
+smoke.exer <- table(survey$Smoke, survey$Exer)
+smoke.exer
+#sind sportliche Aktivitäten und Rauchverhalten unabhängig?
+#hier muss p-Parameter nicht angegeben werden, da default Test auf Unabhängigkeit ist
+chisq.test(smoke.exer)
+#p ist nicht kleiner alpha --> H0 wird nicht verworfen
+#Warnmeldung von R: weil gewisse Zahlen nicht genug gross sein (in jeder Zelle sollte mind. 5 stehen)
+#manchmal hilft es dann, einzelne Spalten zusammenzulegen
+smoke.exer.rev <-cbind(smoke.exer[,1],smoke.exer[,2]+smoke.exer[,3])
+chisq.test(smoke.exer.rev)
+
+
+#Test auf Normalität (sind Daten normalverteilt)
+#ginge z.B. mit Chi-Quadrat Verteilung, aber eleganter mit diversen speziellen Tests, z.B.
+#Jarque-Bera-Test: operiert mit Schiefe und Kurtosis
+
+#1. Beispiel: normalverteilte Zahlen
+daten.norm <- rnorm(10^6)
+hist(daten.norm)
+jarque.test(daten.norm)
+#hoher p-Wert bedeutet wieder: H0 kann nicht verworfen werden
+
+daten.unif <- runif(10^6)
+hist(daten.unif)
+jarque.test(daten.unif)
+#sehr kleiner p-Wert --> H0 wird verworfen
+
+#optischer Test auf Normalität: qq-plot (Normal-Wahrscheinlichkeits-Diagramm)
+groesse.men <- survey[survey$Sex == "Male",]$Height
+groesse.men <- as.numeric(na.omit(groesse.men))
+groesse.men
+hist(groesse.men)
+qqnorm(groesse.men)
+qqline(groesse.men)
+
+#oder noch hübscher
+qqPlot(groesse.men)
+jarque.test(groesse.men)
+
+
+#lineare Regression
+#wie funktioniert die Methode?
+#least.squares(n=10,ani.type = "slope")
+
+eruptiontime <- lm(eruptions ~ waiting, data=faithful)
+#--> geschätztes lineares Modell: eruption = 0.075*waiting - 1.874
+#nun für neuen Wert waiting die Eruption schätzen:
+test <- data.frame(waiting = 80)
+predict(eruptiontime, test)
+
+#Bestimmtheitsmass: R-squared
+summary(eruptiontime)
+#nebst r-squared kommt auch gleich ein Hypothesentest: (je einer für Intercept und waiting)
+# H0: intercept = 0
+# H0: waiting = 0
+```
+

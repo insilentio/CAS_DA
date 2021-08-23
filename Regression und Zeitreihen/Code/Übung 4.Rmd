@@ -1,0 +1,199 @@
+---
+title: "Übung 4"
+output: 
+  html_document: 
+    toc: yes
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl) 
+library(dplyr)
+library(car)
+rosen <- read_excel("Übung 3.xls", sheet = "Data", skip = 9)
+```
+
+#### 1. Definieren Sie folgende logarithmierte Variablen: l_y, l_PR, l_PN,
+l_EINK, l_RelP wobei l_ der natürliche Logarithmus symbolisiert.
+```{r 1}
+rosen <- rosen %>%
+  rename(PR=X2,PN=X3,EINK=X4,T=X5) %>%
+  mutate(RelP = PR/PN, lY = log(Y), lPR = log(PR), lPN = log(PN), lEINK = log(EINK), lRelP = log(RelP), lT = log(T))
+```
+
+
+#### 2. Welche Vorzeichen für die Regressionskoeffizienten erwarten Sie für das Modell 4?
+Rosenpreis: -  
+Nelkenpreis: +  
+Einkommen: +  
+Zeit: -  
+
+
+#### 3. Schätzen Sie diese 5 Regressionsmodelle. Speichern Sie jeweils die geschätzten Werte →yhat1, ...yhat5 wobei yhati = ln(yi).
+```{r 3,results='hold'}
+mod1 <- lm(lY~lPR+lPN, data = rosen)
+mod2 <- lm(lY~lRelP, data = rosen)
+mod3 <- lm(lY~lPR+lPN+lEINK, data = rosen)
+mod4 <- lm(lY~lPR+lPN+lEINK+T, data = rosen)
+mod5 <- lm(lY~lPR+lPN+lEINK+lT, data = rosen)
+smod1 <- summary(mod1)
+smod2 <- summary(mod2)
+smod3 <- summary(mod3)
+smod4 <- summary(mod4)
+smod5 <- summary(mod5)
+smod1
+smod2
+smod3
+smod4
+smod5
+yhat1 <- mod1$fitted.values
+yhat2 <- mod2$fitted.values
+yhat3 <- mod3$fitted.values
+yhat4 <- mod4$fitted.values
+yhat5 <- mod5$fitted.values
+```
+
+
+#### 4. Interpretieren Sie die Regressionskoeffizienten des Regressionsmodells 4 und beurteilen Sie, ob die Parameterschätzungen plausibel sind.
+1% Zunahme des Rosenpreises führt zu 1.17% Abnahme des Rosenabsatzes (plausibel)  
+1% Zunahme des Nelkenpreises führt zu 0.73% Zunahme des Rosenabsatzes (plausibel)  
+1% Zunahme des Einkommens führt zu 1.15% Zunahme des Rosenabsatzes (plausibel)  
+Zunahme der Zeit um ein Quartal führt zu einer Abnahme des Rosenabsatzes um `r (exp(mod4$coefficients[5])-1)*100`% (plausibel)  
+
+#### 5. Sind diese Koeffizienten statistisch signifikant auf dem 5%-Signifikanzniveau?
+Nur lPR.
+
+#### 6. Öffnen Sie die Korrelationsmatrix
+```{r 6}
+rosen <- rosen %>%
+  mutate(e1 <- exp(yhat1), e2 <- exp(yhat2), e3 <- exp(yhat3), e4 <- exp(yhat4), e5 <- exp(yhat5))
+cm <- cor(rosen[c(2,14:18)])
+cm
+```
+
+
+#### 7. Berechnen Sie die quadrierten Korrelationskoeffizienten ρ2 (y,yhati) i = 1,...,5
+```{r 7}
+cm^2
+```
+
+
+#### 8. Welches Regressionsmodell würden Sie auswählen. Begründen Sie Ihre Auswahl.
+Modell 4, da es den besten R^2^ Wert hat.
+
+#### 9. Folgende Modelle wurden aus der Übung 3 und 4 ausgewählt: 
+TeilI,Modell2→2A: yt =β1 +β2RelP+ut  
+Teil II, Modell 2 →2B: lnyt = β1 + β2lnRelP + ut  
+Wie können jetzt diese Modelle miteinander verglichen werden? Welches Modell würden Sie vorziehen? Begründen Sie Ihre Antwort.  
+
+Da y in Teil II transformiert wurde, muss der Vergleich auf Stufe Quadrat des Stichproben-Korrelationskoeffizienten geführt werden. Hier ist der Wert für das nicht transformierte Modell besser.
+
+#### 10. Führen Sie den MWD-Test durch
+ja genau
+
+#### 11. Testen Sie das Regressionsmodell 1 mit dem F-Test!
+Modell 1: lnyt = β1 + β2lnPRt + β3lnPNt + ut Welche Frage entspricht der Nullhypothese?
+
+##### i. Stellen Sie die Nullhypothese und alternative Hypothese auf. 
+Nullhypothese H0: β~1~=β~2~=β~3~=β~4~=β~5~=0, H1: β~i~≠0
+
+##### ii. Bestimmen Sie den kritischen F-Wert (Fc) auf dem 5%-Niveau. Kritischer
+Wert Fc(0.95,2 , 13) = `r qf(.05,2,13, lower.tail = F)`  
+Zähler-Freiheitsgrade: K-1  
+Nenner-Freiheitsgrade: N-K  
+
+##### iii. Berechnen Sie den F-test mittels Bestimmtheitsmass
+F = R^2^/(1-R^2^) * (N − k)/L
+```{r 11iii}
+N <- nrow(rosen)
+K <- length(mod1$coefficients)
+smod1$r.squared/(1-smod1$r.squared) * (N-K)/(K-1)
+```
+
+
+##### iv. Was ist Ihre Schlussfolgerung?
+Der F-Wert ist > kritischer Wert, daher kann die Nullhypothese abgelehnt werden. Mindestens einer der Koeffizienten
+leistet einen signifikanten Erklärungsbeitrag.
+
+#### 12. Führen Sie einen Test auf „Weglassen der Variablen“ durch. Nehmen Sie die Variablen l_PR und l_PN vom Modell 1 weg. Was ist Ihre Schlussfolgerung anhand dieses Tests?
+```{r}
+lh1 <- linearHypothesis(mod1,c("lPR = 0", "lPN = 0"), test = "F")
+lh1
+```
+Mit einem p-Wert deutlich kleiner 5% muss diese Nullhypothese verworfen werden. Die Koeffizienten von Modell 1 leisten somit
+einen Erklärungsbeitrag.
+
+
+#### 13. Interpretieren Sie beim Modell 1 konkret folgende Restriktion: β2 = -β3
+```{r 13}
+lh2 <- linearHypothesis(mod1,c("lPR = -lPN"), test = "F")
+lh2
+``` 
+Bei einer Erhöhung des Rosenpreises um 1% sinkt der Nelkenpreis um 1%. Mit einem p-Wert > 5% kann die Nullhypothese nicht verworfen werden.
+
+
+#### 14. Stellen Sie das restringierte Modell auf und schätzen Sie es. 
+Regressionsmodell: lny = β1 + β2 lnPRt + β3 lnPNt + u  
+Restringiertes Modell:
+Definieren Sie die neue Variable: l_diff = lnPR – lnPN
+```{r 14}
+rosen$lDiff <- rosen$lPR - rosen$lPN
+mod6 <- lm(lY ~ lDiff, rosen)
+smod6 <- summary(mod6)
+smod6
+```
+
+
+#### 15. Testen Sie die Signifikanz von b2 mittels t-Test.
+```{r 15}
+tc <- qt(.05, df=nrow(rosen)-nrow(smod6$coefficients), lower.tail = F)
+tv <- smod6$coefficients[2,1]/smod6$coefficients[2,2]
+tv > tc
+```
+Da t-Wert nicht > kritischer Wert, kann Nullhypothese nicht abgelehnt werden. b~2~ ist somit signifikant.
+
+#### 16. Testen Sie anhand des F-Tests auf dem 5%-Signifikanzniveau, ob die Restriktion falsch ist.
+p-Wert < 5%, somit kann Nullhypothese verworfen werden. Die Restriktion darf nicht als falsch eingestuft werden.
+
+
+#### 17. Berechnen Sie den F-Wert mittels F = (RSSr − RSS)/RSS * (N − K)/L
+```{r 17}
+RSS <- anova(mod1)$'Sum Sq'[3]
+RSSr <- anova(mod6)$'Sum Sq'[2]
+L <- 1
+Fe <- (RSSr - RSS)/RSS * (N-K)/(L)
+Fc <- qf(.95,1,13)
+Fe > Fc
+```
+
+
+#### 18. Testen Sie diese Restriktion mittels gretl Restriktionen Funktion. 
+siehe 13
+
+#### 19. Testen Sie im Regressionsmodel 4, ob die Variablen l_PN, l_EINK und T gemeinsam statistisch signifikant sind.
+```{r 19}
+linearHypothesis(mod4, c("lPN = 0", "lEINK = 0", "T = 0"))
+qf(.95,3,13)
+```
+Der p-Wert ist kleiner 5%. Die Nullhypothese kann verworfen werden, mindestens einer der 3 Koeffizienten leistet einen zusätzlichen Erklärungsbeitrag.
+
+#### 20. Testen Sie im Modell 4, ob die Preiselastizität -1 entspricht. Die Preiselastizität ist das Verhältnis der prozentualen Änderung des Rosenabsatzes zur prozentualen Veränderung des Rosenpreises.
+
+H0: b2 = -1
+```{r 20}
+lh3 <- linearHypothesis(mod4, c("lPR = -1"), test = "F")
+lh3
+```
+Der p-Wert beträgt `r lh3[2,6]` und liegt somit über dem Signifikanzniveau. Die Nullhypothese kann nicht verworfen werden; es besteht Preiselastizität.
+
+
+#### 21. Testen Sie im Modell 4, ob die Kreuzpreiselastizität 1 entspricht. Die Kreuzpreiselastizität ist das Verhältnis der prozentualen Änderung des Rosenabsatzes zur prozentualen Veränderung des Nelkenpreises.
+
+H0: b2 = 1
+```{r 21}
+lh4 <- linearHypothesis(mod4, c("lPN = 1"), test = "F")
+lh4
+```
+Der p-Wert beträgt `r lh4[2,6]` und liegt somit über dem Signifikanzniveau. Die Nullhypothese kann nicht verworfen werden; es besteht
+Preiselastizität.

@@ -1,0 +1,90 @@
+---
+title: "Mitschreibskript Regression"
+author: "Daniel Baumgartner"
+date: "7 8 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+
+## Übung 1
+
+```{r}
+library(readxl)
+autos <- read_excel("Uebung_1_Gebrauchtautos.xlsx")
+str(autos)
+mod <- lm(Preis~Alter+KM, data = autos)
+summary(mod)
+plot(summary(mod)$residuals)
+
+summary(autos)
+```
+
+
+## Übung 2
+```{r 2}
+#F-Test: kritischer F-Wert bestimmen. Bsp. Modell Lohn mit Ausbildung, Dauer, Alter. N=15, K = 3, α=0.05
+qf(.05,2,12, lower.tail = F)
+#F-Test: kritischer F-Wert bestimmen. Bsp. Modell Lohn mit Ausbildung, Dauer, Alter. N=20, K = 4, α=0.05
+qf(.05,3,16, lower.tail = F)
+```
+
+
+```{r}
+AIC()
+BIC()
+```
+
+
+
+```{r}
+strom <- read_excel("Übung 7_ZR.xlsx", skip = 1)
+strom <- ts(strom, frequency = 4)
+strom
+holt <- HoltWinters(strom)
+plot(strom)
+plot(holt)
+decompose()
+holt$fitted
+plot(holt$fitted)
+holt$x
+
+
+require(graphics)
+
+## Seasonal Holt-Winters
+(m <- HoltWinters(co2))
+plot(m)
+plot(fitted(m))
+
+(m <- HoltWinters(AirPassengers, seasonal = "mult"))
+plot(m)
+
+## Non-Seasonal Holt-Winters
+x <- uspop + rnorm(uspop, sd = 5)
+m <- HoltWinters(x, gamma = FALSE)
+plot(m)
+
+## Exponential Smoothing
+m2 <- HoltWinters(x, gamma = FALSE, beta = FALSE)
+lines(fitted(m2)[,1], col = 3)
+
+
+df1 <- data.frame(c(10, 31, 43, 16, 11, 33, 45 ,17, 14, 36, 50, 21, 19, 41, 55, 25))
+ts1 <- ts(df1, frequency = 4, start = c(1, 1))
+hw <- HoltWinters(ts1)
+cbind(hw$x, hw$fitted)
+plot(hw)
+lines(hw$fitted[,1], col="blue")
+
+predict(hw, n.ahead = 4)
+
+hp
+
+plot(1:100, sqrt(1:100), type = "o")
+```
+

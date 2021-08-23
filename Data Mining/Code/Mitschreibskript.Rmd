@@ -1,0 +1,961 @@
+---
+title: "Mitschreibskript CAS DA Data Mining"
+output: 
+  html_document: 
+    toc: yes
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(readr)
+library(reshape2)
+library(scatterplot3d)
+library(Biobase)
+library(GEOquery)
+library(dbscan)
+library(tm)
+library(wordcloud)
+```
+
+
+#### Vorlesung 1 
+
+eigenes Beispiel mit iPhone Bewegungsdaten
+```{r iphone}
+phyphox <- read_delim("~/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/phyphox 2017-08-25 14-11-11.csv", ";", escape_double = FALSE, trim_ws = TRUE)
+phymelt <- melt(phyphox,id = c("Time (s)"))
+ggplot(data = phymelt)+
+  aes(x=`Time (s)`, y=value, color = variable)+
+  geom_line()+
+  facet_grid(variable ~.)
+
+#mit k-means Algorithmus, 3 Cluster vorgegeben
+km <- kmeans(phyphox[2:4],3)
+km$centers
+km$tot.withinss
+```
+
+Example: Clustering
+```{r clustering}
+setwd("/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data1")
+
+#create a data frame from all files in specified folder
+create_activity_dataframe = function(activityFolder,classId) {
+  file_names = dir(activityFolder)
+  file_names = lapply(file_names, function(x){ paste(".",activityFolder,x,sep = "/")})
+  your_data_frame = do.call(rbind,lapply(file_names,function(x){read.csv(x,header = FALSE,sep = " ")}))
+  your_data_frame = cbind(data.frame(rep(classId,nrow(your_data_frame))),your_data_frame)
+  your_data_frame = cbind(data.frame(1:nrow(your_data_frame)),your_data_frame)
+  colnames(your_data_frame) = c("timestep","class","x","y","z")
+  return(your_data_frame)
+}
+
+df1 = create_activity_dataframe("/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data1/Brush_teeth",1)
+head(df1_sample)
+df1_sample = df1[sample(nrow(df1), 100), ]
+ggplot(df1_sample, aes(timestep)) + 
+  geom_line(aes(y = x, colour = "x")) + 
+  geom_line(aes(y = y, colour = "y")) + 
+  geom_line(aes(y = z, colour = "z"))
+
+# add more data
+df2 = create_activity_dataframe("/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data1/Climb_stairs",2)
+df3 = create_activity_dataframe("/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data1/Drink_glass",3)
+df4 = create_activity_dataframe("/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data1/Getup_bed",4)
+df5 = create_activity_dataframe("/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data1/Use_telephone",5)
+
+
+dfc = rbind(df1,20*df2,30*df3,40*df4)
+dim(dfc)
+dim(df1)
+df_x_y_z = cbind(dfc$x,dfc$y,dfc$z)
+
+dfc2 = rbind(df1,20*df2)
+df_x_y_z2 = cbind(dfc2$x,dfc2$y,dfc2$z)
+#number_of_clusters=2
+#sum(kmeans(df_x_y_z,centers=number_of_clusters)$withinss)
+#sum(kmeans(df_x_y_z2,centers=number_of_clusters)$withinss)
+
+determine_number_of_clusters_2 = function(df,df2) {
+  # value with only one cluster
+  wss = (nrow(df)-1)*sum(apply(df,2,var))
+  # value for the other clusters
+  for (i in 2:15) wss[i] = sum(kmeans(df,
+                                      centers=i)$withinss)
+  wss2 = (nrow(df2)-1)*sum(apply(df2,2,var))
+  # value for the other clusters
+  for (j in 2:15) wss2[j] = sum(kmeans(df2,
+                                       centers=j)$withinss)
+  return(cbind(1:15,wss,wss2))
+}
+out=determine_number_of_clusters_2(df_x_y_z,df_x_y_z2)
+View(out)
+out_norm = cbind(out[,1],out[,2]/max(out[,2]),out[,3]/max(out[,3]))
+View(out_norm)
+dfout_norm = data.frame(out_norm)
+colnames(dfout_norm) = c("xplot","four","two")
+
+# plot to see visually how the curves look like
+ggplot(dfout_norm,aes(xplot)) +
+  geom_line(aes(y = four, colour = "four")) + 
+  geom_line(aes(y = two, colour = "two")) +
+  labs(y="normalized within-cluster sum of squares") +
+  labs(x="number of clusters")
+
+
+number_of_clusters=2
+n = nrow(df)
+
+kmeans(df,centers=number_of_clusters)$centers
+
+df_clas_x_y_z = cbind(df$class,df$x,df$y,df$z)
+kmeans(df_clas_x_y_z,centers=number_of_clusters)$centers
+
+df_x_y_z = cbind(df$x,df$y,df$z)
+determine_number_of_clusters(df_x_y_z)
+km = kmeans(df_x_y_z,centers=number_of_clusters)
+
+
+truthVector = km$cluster != df$class
+good = length(truthVector[truthVector==TRUE])
+bad = length(truthVector[truthVector==FALSE])
+good/(good+bad)
+
+df_sample = df[sample(nrow(df), 500), ]
+with(df_sample, {
+  scatterplot3d(x,y,z)
+})
+
+centers_df = km$centers
+colnames(centers_df) = c("x","y","z")
+with(data.frame(centers_df), {
+  scatterplot3d(x,y,z)
+})
+
+
+centroid1 = data.frame(0,5,km$centers[1,1],km$centers[1,2],km$centers[1,3])
+colnames(centroid1) = c("timestep","class","x","y","z")
+centroid2 = data.frame(0,6,km$centers[2,1],km$centers[2,2],km$centers[2,3])
+colnames(centroid2) = c("timestep","class","x","y","z")
+data2plot = rbind(centroid1,centroid2,df_sample)
+ds3 = scatterplot3d(data2plot$x,data2plot$y,data2plot$z,color = as.numeric(data2plot$class))
+```
+
+
+Demo: mtcars
+```{r mtcars}
+head(mtcars)
+qplot(wt,mpg,data = mtcars)
+
+transmission = factor(mtcars$am,levels = c(0,1),labels = c("Automatic","Manual"))
+
+mod = lm(wt~mpg,data = mtcars)
+
+qplot(wt,mpg,
+      data = mod,
+      color = transmission,
+      shape = transmission,
+      geom = c("point","smooth"),
+      xlab = "Weight",
+      ylab = "MilesPerGallon",
+      main = "Regression Example",
+      method   = "lm")
+```
+
+
+
+Example: csv mit Genen
+```{r genes}
+#@author: Romeo Kienzler & Andrea Giovannini
+#This file is copyright protected - do not redistribute
+
+source("http://www.bioconductor.org/biocLite.R")
+biocLite("GEOquery") # see: http://www.bioconductor.org/packages/release/bioc/html/GEOquery.html
+
+GDS5093 <- getGEO('GDS5093', destdir="/Users/Andrea/Documents/Iniziative/BFH/2017/1_course/R-Scripts Woche 1/dataset")
+# Analysis of blood from patients with acute Dengue virus (DENV) infection and during convalescence. Dengue is a mosquito-borne infectious disease and Dengue Hemorrhagic Fever is a life-threatening illness. Results provide insight into molecular mechanisms underlying host response to DENV infection.
+# https://www.ncbi.nlm.nih.gov/sites/GDSbrowser?acc=GDS5093
+GDS5088 <- getGEO('GDS5088', destdir="/Users/Andrea/Documents/Iniziative/BFH/2017/1_course/R-Scripts Woche 1/dataset")
+# Analysis of cell-free plasma from pregnant women during the first, second, third trimesters and immediately post-partum. Results provide insight into a noninvasive means to monitor the expression status of many tissues and measure temporal expression of genes longitudinally during development.
+
+dfVirus = Table(GDS5093)
+dfMother = Table(GDS5088)
+dim(dfVirus)
+dim(dfMother)
+View(dfVirus[sample(nrow(dfVirus), 100),])
+colnames(dfMother)
+dfVirus[,2]
+dfMother[,2]
+commonGenes = intersect(dfVirus[,2],dfMother[,2])
+length(commonGenes)
+length(dfVirus[,2])
+length(dfMother[,2])
+dfVirusFilterMask = (dfVirus$IDENTIFIER %in% commonGenes) & !duplicated(dfVirus$IDENTIFIER)
+dfVirusFiltered = dfVirus[dfVirusFilterMask,]
+dfMotherFilterMask = dfMother$IDENTIFIER %in% commonGenes & !duplicated(dfMother$IDENTIFIER)
+dfMotherFiltered = dfMother[dfMotherFilterMask,]
+dim(dfVirusFiltered)
+dim(dfMotherFiltered)
+# plot for one individual case
+qplot(dfVirusFiltered$IDENTIFIER,dfVirusFiltered$GSM1253056, geom = "point")
+
+
+meanVirus=colMeans(apply(dfVirusFiltered[,3:dim(dfVirusFiltered)[[2]]],1, as.numeric)) 
+meanMother=colMeans(apply(dfMotherFiltered[,3:dim(dfMotherFiltered)[[2]]],1, as.numeric)) 
+dfMeanVirus = data.frame(1:length(meanVirus),replicate(length(meanVirus),0),meanVirus)
+dfMeanMother = data.frame(1:length(meanMother),replicate(length(meanMother),1),meanMother)
+#gene sorting? #kommentare
+colnames(dfMeanVirus)
+colnames(dfMeanVirus)[1] = "geneid"
+colnames(dfMeanVirus)[2] = "sample"
+colnames(dfMeanVirus)[3] = "mean"
+colnames(dfMeanMother)[1] = "geneid"
+colnames(dfMeanMother)[2] = "sample"
+colnames(dfMeanMother)[3] = "mean"
+
+# difference
+resultD = cbind(dfMeanVirus[1],dfMeanVirus[3]-dfMeanMother[3])
+qplot(resultD$geneid,resultD$mean)
+
+result = rbind(dfMeanVirus,dfMeanMother)
+
+qplot(result$geneid,result$mean, color=factor(result$sample))
+```
+
+
+#### Vorlesung 2
+```{r FFT}
+#@author: Andrea Giovannini
+#This file is copyright protected - do not redistribute
+#set the working directory specific to my machine
+setwd("/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data1")
+
+
+#create a data frame from all files in specified folder
+create_activity_dataframe = function(activityFolder,classId) {
+  file_names = dir(activityFolder)
+  file_names = lapply(file_names, function(x){ paste(activityFolder,x,sep = "/")})
+  your_data_frame = do.call(rbind,lapply(file_names,function(x){read.csv(x,header = FALSE,sep = " ")}))
+  your_data_frame = cbind(data.frame(rep(classId,nrow(your_data_frame))),your_data_frame)
+  your_data_frame = cbind(data.frame(1:nrow(your_data_frame)),your_data_frame)
+  colnames(your_data_frame) = c("timestep","class","x","y","z")
+  return(your_data_frame)
+}
+
+# read personal data
+#am Beispiel von iOS Bewegungsdaten
+df_p = read.csv("/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data2/my_iOS_device_3.csv",header = TRUE,sep = ",")
+colnames(df_p)
+df_p_acc = cbind(df_p$accelerometerTimestamp_sinceReboot.s.,df_p$accelerometerAccelerationX.G.,df_p$accelerometerAccelerationY.G.,df_p$accelerometerAccelerationZ.G.)
+colnames(df_p_acc) = c("Time","ax","ay","az")
+#Beschleunigung
+atot = (df_p_acc[,2]^2 + df_p_acc[,3]^2 + df_p_acc[,4]^2)^0.5 #module
+#atot = df_p_acc[,4] #component
+#time dimension
+time = df_p_acc[,1]
+time_plot = (time-time[1])
+#delta time mean (Abstand zw. Messpunkten)
+dtmn = (time[length(time)]-time[1])/length(time)
+# Fourier-Transformation
+res_fft = fft(atot)
+amplitude = Mod(res_fft[1:(length(res_fft)/2)])
+frequency = seq(0, 1/dtmn  * 1/2, length.out=length(res_fft)/2)
+plot(amplitude ~ frequency, t="l", ylim=c(0,50),xlim=c(0,20),ylab = "Amplitude",xlab= "Frequency [Hz]")
+plot(atot ~ time_plot,t="l")
+
+
+# Schwingungsdaten eines Flugzeugs
+df_p = read.csv("/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data2/aircraft_takeoff.csv",header = TRUE,sep = ",")
+#View(df_p)
+time = df_p[,1]
+atot = df_p[,2]
+time_plot = (time-time[1])
+dtmn = (time[length(time)]-time[1])/length(time)
+res_fft = fft(atot)
+amplitude = Mod(res_fft[1:(length(res_fft)/2)]) #nur die Hälfte der Daten nehmen, da die andere Hälfte die gespiegelten im ε-Raum sind
+frequency = seq(0, 1/dtmn * 1/2, length.out=length(res_fft)/2-1) 
+plot(amplitude ~ frequency, t="l", ylim=c(0,1000),xlim=c(0,1000),ylab = "Amplitude",xlab= "Frequency [Hz]")
+plot(atot ~ time_plot,t="l", ylim=c(-.1,.1),xlim=c(0,100))
+
+
+
+df1 = create_activity_dataframe("/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data1/Brush_teeth",1)
+df1 = create_activity_dataframe("/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data1/Climb_stairs",2)
+atot =(df1[,3]^2 + df1[,4]^2 + df1[,5]^2)^0.5
+time = df1[,1]
+time_plot = (time-time[1])
+dtmn = 0.05# only a timestamp is given(time[length(time)]-time[1])/length(time)
+res_fft = fft(atot)
+amplitude = Mod(res_fft[1:(length(res_fft)/2)])
+frequency = seq(0, 1/dtmn  * 1/2, length.out=length(res_fft)/2)
+plot(amplitude ~ frequency, t="l", ylim=c(0,7500),xlim=c(0,10),ylab = "Amplitude",xlab= "Frequency [Hz]")
+plot(atot ~ time_plot,t="l")
+```
+
+Density based clustering
+```{r DBSCAN}
+#@author: Andrea Giovannini & Romeo Kienzler
+#This file is copyright protected - do not redistribute
+
+data(iris)
+head(iris)
+irisorg = iris
+iris <- as.matrix(iris[,1:4])
+unique(irisorg$Species)
+scatterplot3d(iris[,1],iris[,4],iris[,3], highlight.3d=TRUE, col.axis="blue", col.grid="lightblue", main="scatterplot3d - 1", pch=20)
+res = dbscan(iris, eps = .8, minPts = 10)
+#Meaning of epsilon:
+#specifies how close points should be to each other to be considered a part of a cluster; 
+#Meaning of minPts:
+#specifies how many neighbors a point should have to be included into a cluster.
+length(unique(res$cluster))
+map = list("setosa"=1, "versicolor"=2, "virginica"=3)
+specieskey = unlist(lapply(irisorg$Species,  function(species) map[[species]]))
+# einfacher wäre direkt sapply():
+specieskey <- sapply(irisorg$Species,  function(species) map[[species]])
+
+# evaluation
+truthVectorValidate = res$cluster == specieskey
+good = length(truthVectorValidate[truthVectorValidate==TRUE])
+bad = length(truthVectorValidate[truthVectorValidate==FALSE])
+good/(good+bad)
+
+```
+
+
+
+```{r bayes}
+#@author: Andrea Giovannini & Romeo Kienzler
+#This file is copyright protected - do not redistribute
+library(tm)
+library(wordcloud)
+library(SnowballC)
+
+setwd("/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data2/TR")
+
+#get a list of all email from the directory
+file_list = list.files("/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data2/TR", full.names = T)
+
+#remove the first entry (doesn't contain an email)
+file_list = file_list[-1]
+
+#create an empty data frame
+df = data.frame(emailtext=character(),stringsAsFactors=FALSE) 
+
+#add each email as row to the data frame
+for (fileName in file_list){
+  fileName
+  #writeLines(iconv(readLines(fileName), from = "ASCII", to = "UTF8"), fileName)
+  #text_b = readLines(fileName)
+  text_b_utf8=iconv(readLines(fileName),to="utf-8-mac")
+  #text=readChar(fileName, file.info(fileName)$size) # problem with utf-8
+  #df=rbind(df,data.frame(text,stringsAsFactors = FALSE))
+  df=rbind(df,data.frame(paste(text_b_utf8, collapse = ' '),stringsAsFactors = FALSE))
+}
+head(df)
+#we have now 2500 emails in the data frame
+dim(df)
+colnames(df) = "text"
+#create a S3 Corpus Object for easy post processing
+spam_corpus=Corpus(VectorSource(df$text))
+#spam_corpus <- iconv(spam_corpus,to="utf-8-mac")
+inspect(spam_corpus[1:3])
+clean_corpus=tm_map(spam_corpus, tolower)
+#clean_corpus=tm_map(clean_corpus, PlainTextDocument)
+clean_corpus=tm_map(clean_corpus, removeNumbers)
+clean_corpus=tm_map(clean_corpus, removePunctuation)
+clean_corpus=tm_map(clean_corpus, removeWords, stopwords())
+clean_corpus=tm_map(clean_corpus, stripWhitespace)
+
+#convert list of email to document term matrix
+#clean_corpus <- iconv(clean_corpus,to="utf-8-mac")
+dtm=DocumentTermMatrix(clean_corpus)
+inspect(dtm[100:110, 1000:2000])
+str(dtm)
+
+#plot a word cloud to see whats going on
+wordcloud(clean_corpus$content, max.words=40)
+#wordcloud(clean_corpus[labels==1], min.freq=40)
+
+#load labels from separate file
+labels = read.csv('/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data2/spam-mail.tr.label')
+labels = labels[,2]
+
+#wordcloud(spam_corpus[labels$Prediction==1], min.freq=40)
+
+dfLabeled = cbind(df,labels)
+sms_raw_train <- dfLabeled[1:1750,]
+sms_raw_test <- dfLabeled[1751:2500,]
+sms_dtm_train <- dtm[1:1750,]
+sms_dtm_test <- dtm[1751:2500,]
+spam_corpus_train <- clean_corpus[1:1750]
+spam_corpus_test <- clean_corpus[1751:2500]
+
+#Check the proportion of spam versus ham. It should be similar.
+round(prop.table(table(sms_raw_train$labels))*100)
+round(prop.table(table(sms_raw_test$labels))*100)
+
+# visualize the 2 groups
+spam = subset(sms_raw_train, labels == 1)
+ham = subset(sms_raw_train, labels == 0)
+
+wordcloud(spam$text, max.words=40)#min.freq=40)
+wordcloud(ham$text, max.words=40)
+
+# reduce to most frequent terms
+five_times_words <- findFreqTerms(sms_dtm_train, 5)
+length(five_times_words)
+
+sms_train_freq5 <- DocumentTermMatrix(spam_corpus_train, control=list(dictionary = five_times_words))
+
+sms_test_freq5 <- DocumentTermMatrix(spam_corpus_test, control=list(dictionary = five_times_words))
+
+inspect(sms_train_freq5[100:110, 1600:1610])
+#check the number of features
+ncol(sms_train_freq5)
+ncol(sms_test_freq5)
+
+convert_count <- function(x) {
+  y <- ifelse(x > 0, 1,0)
+  y <- factor(y, levels=c(0,1), labels=c("No", "Yes"))
+  y
+}
+
+sms_train_freq5 <- apply(sms_train_freq5, 2, convert_count)
+sms_train_freq5[100:110, 1600:1610]
+sms_test_freq5 <- apply(sms_test_freq5, 2, convert_count)
+str(sms_train_freq5)
+str(sms_test_freq5)
+
+library(e1071)
+sms_classifier <- naiveBayes(sms_train_freq5, factor(sms_raw_train$labels))
+class(sms_classifier)
+sms_test_pred <- predict(sms_classifier, factor(sms_test_freq5))
+
+#sms_classifier <- naiveBayes(sms_raw_train , factor(sms_raw_train$labels))
+#sms_test_pred <- predict(sms_classifier, sms_raw_test$text)
+
+table(sms_test_pred, sms_raw_test$labels)
+sms_test_pred
+truthVector =sms_test_pred == sms_raw_test$labels
+good = length(truthVector[truthVector==TRUE])
+bad = length(truthVector[truthVector==FALSE])
+good/(good+bad)
+table(sms_test_pred,sms_raw_test$labels)
+
+
+```
+
+
+#### Vorlesung 3
+Vergleich der 3 Haupt-Clustering-Algorithmen
+```{r clustercomparison}
+#@author: Andrea Giovannini & Romeo Kienzler
+#This file is copyright protected - do not redistribute
+#******* DBSCAN********
+library(dbscan)
+library(scatterplot3d)
+data(iris)
+head(iris)
+irisorg <- iris
+iris <- as.matrix(iris[,1:4])
+unique(irisorg$Species)
+#Achtung: Scatterplot nur über 3D möglich, sind aber 4D in den Daten
+scatterplot3d(iris[,1],iris[,4],iris[,3], highlight.3d=T, col.axis="blue", col.grid="lightblue", main="scatterplot3d - 1", pch=20)
+res <- dbscan(iris, eps = .8, minPts = 10)
+#Meaning of epsilon:
+#specifies how close points should be to each other to be considered a part of a cluster; 
+#Meaning of minPts:
+#specifies how many neighbors a point should have to be included into a cluster.
+length(unique(res$cluster))  #--> das stimmt mit den Ursprungsarten (3 Spezies) überein
+map <- list("setosa"=1, "versicolor"=2, "virginica"=3)
+specieskey <- sapply(irisorg$Species,  function(species) map[[species]])
+
+# evaluation
+sum(res$cluster == specieskey)/nrow(iris)
+
+#Achtung: die Zuordnung durch den Algorithmus ist natürlich zufällig, d.h. die 1 des Algorithmus entspricht höchstens per Zufall
+# dem Setosa:
+table(res$cluster,specieskey)
+
+
+
+# ************** kmeans ***************
+number_of_clusters <- 3
+km <- kmeans(iris,centers=number_of_clusters)
+table(km$cluster,specieskey)
+map <- list("setosa"=1, "versicolor"=2, "virginica"=3)
+specieskey <- unlist(lapply(irisorg$Species,  function(species) map[[species]]))
+
+# evaluation
+sum(km$cluster == specieskey)/nrow(iris)
+
+
+# ************** Expectation Maximisation (EM) / distribution based Gaussian ***************
+#Expectation Maximisation (EM)
+library(EMCluster, quietly = TRUE)
+data("iris")
+set.seed(1234)
+ggplot(iris, aes(Petal.Length, Petal.Width, color = Species)) + geom_point()
+x <- as.matrix(iris[, 1:4])
+ret <- init.EM(x, nclass = 3, min.n = 30)
+ret.proj <- project.on.2d(x, ret)
+plotppcontour(ret.proj$da, ret.proj$Pi, ret.proj$Mu, ret.proj$S, ret.proj$class, main = "Iris K = 3")
+
+# evaluation
+ret$class
+table(ret$class,specieskey)
+map = list("setosa"=2, "versicolor"=3, "virginica"=1)
+specieskey = sapply(irisorg$Species,  function(species) map[[species]])
+sum(ret$class == specieskey)/nrow(iris)
+
+
+
+# ************** Hierarchical Clustering **************
+
+clusters <- hclust(dist(iris[, 1:4],method = "man"), method = "complete")
+# different methods for hclust are available, in this case "average" has the best performance
+# the distance can be also calculated using different methods, standard is "euclidean", but also e.g. "manhattan" in possible
+plot(clusters)
+clusterCut <- cutree(clusters, 3)
+table(clusterCut,iris$Species)
+
+map = list("setosa"=1, "versicolor"=2, "virginica"=3)
+specieskey = unlist(lapply(iris$Species,  function(species) map[[species]]))
+
+truthVectorValidate = clusterCut == specieskey
+good = length(truthVectorValidate[truthVectorValidate==TRUE])
+bad = length(truthVectorValidate[truthVectorValidate==FALSE])
+good/(good+bad)
+```
+
+
+
+Categorization: Naive Bayes (verbesserte Variante)
+```{r bayes2}
+#@author: Andrea Giovannini & Romeo Kienzler
+#This file is copyright protected - do not redistribute
+library(tm)
+library(wordcloud)
+library(SnowballC)
+
+setwd("/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data2/TR")
+
+#get a list of all email from the directory
+file_list = list.files()
+
+#remove the first entry (doesn't contain an email)
+file_list = file_list[-1]
+
+#create an empty data frame
+df = data.frame(emailtext=character(),stringsAsFactors=FALSE) 
+c_id=NULL
+#add each email as row to the data frame
+for (fileName in file_list){
+  fileName
+  text_b_utf8=iconv(readLines(fileName),to="utf-8-mac")
+  df=rbind(df,data.frame(paste(text_b_utf8, collapse = '\n'),stringsAsFactors = FALSE))
+  fileName_nopoint = gsub(".eml","",as.character(fileName))
+  c_id=rbind(c_id,as.character(lapply(strsplit(as.character(fileName_nopoint),"_"),"[[",2)))
+}
+df = cbind(df,c_id)
+colnames(df) = c("text","id")
+head(df)
+#we have now 2500 emails in the data frame
+dim(df)
+
+
+# initialize the data frame
+#df_clean = data.frame(emailtext=character(),stringsAsFactors=FALSE) 
+c_clean = NULL
+#cleaning
+for(i in 1:dim(df)[1]){
+  temp = unlist(strsplit(df$text[i],"\n\n",fixed = TRUE)) #divide the email text for every double new line
+  temp_paste = paste(temp[2:length(temp)], collapse = "\n") #reunite the email text neglecting the first element
+  #temp2 = unlist(strsplit(temp_paste,"\n--",fixed = TRUE)) #divide the email text when \n-- occurs
+  temp3 = gsub("\\s*<[^\\)]+?>","",as.character(temp_paste))#temp2[1])) #use regex to delete the content between <>
+  c_clean=rbind(c_clean,as.character(temp3)) #insert in the df object
+}
+df_clean=data.frame(cbind(c_clean,c_id))
+colnames(df_clean) = c("text","id")
+head(df_clean)
+#df_clean = df
+
+# test regex
+text_p = "akakak <kfnwelnjf ekwlfwm> lsnfkjsndfk kajnsfkjand <kjan 2323 knefk33> fnekwjhufhnc "
+gsub("\\s*<[^\\)]+?>","",as.character(text_p))
+
+#create a S3 Corpus Object for easy post processing
+spam_corpus=Corpus(VectorSource(df_clean$text))
+#spam_corpus <- iconv(spam_corpus,to="utf-8-mac")
+inspect(spam_corpus[1:3])
+clean_corpus=tm_map(spam_corpus, tolower)
+#clean_corpus=tm_map(clean_corpus, PlainTextDocument)
+clean_corpus=tm_map(clean_corpus, removeNumbers)
+clean_corpus=tm_map(clean_corpus, removePunctuation)
+clean_corpus=tm_map(clean_corpus, removeWords, stopwords())
+clean_corpus=tm_map(clean_corpus, stripWhitespace)
+
+#convert list of email to document term matrix
+#clean_corpus <- iconv(clean_corpus,to="utf-8-mac")
+dtm=DocumentTermMatrix(clean_corpus)
+inspect(dtm[100:110, 1000:2000])
+str(dtm)
+
+#plot a word cloud to see whats going on
+wordcloud(clean_corpus$content, max.words=40)
+
+# nun die häufigsten Wörter nehmen
+findFreqTerms(dtm, 5)
+freqs <- as.data.frame(inspect(dtm))
+colSums(freqs)
+
+#load labels from separate file
+labels = read.csv("/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data2/spam-mail.tr.label")
+colnames(labels) = c("id","prediction")
+head(labels)
+clean_merge = merge(df_clean,labels,by="id")
+head(clean_merge)
+labels = labels[,2]
+
+#wordcloud(spam_corpus[labels$Prediction==1], min.freq=40)
+
+#dfLabeled = cbind(df_clean,labels)
+dfLabeled = clean_merge
+sms_raw_train <- dfLabeled[1:1750,]
+sms_raw_test <- dfLabeled[1751:2500,]
+sms_dtm_train <- dtm[1:1750,]
+sms_dtm_test <- dtm[1751:2500,]
+spam_corpus_train <- clean_corpus[1:1750]
+spam_corpus_test <- clean_corpus[1751:2500]
+
+#Check the proportion of spam versus ham. It should be similar.
+round(prop.table(table(sms_raw_train$prediction))*100)
+round(prop.table(table(sms_raw_test$prediction))*100)
+
+# visualize the 2 groups
+spam = subset(sms_raw_train, prediction == 1)
+ham = subset(sms_raw_train, prediction == 0)
+
+wordcloud(spam$text, max.words=40)#min.freq=40)
+wordcloud(ham$text, max.words=40)
+
+# reduce to most frequent terms
+five_times_words <- findFreqTerms(sms_dtm_train, 10)
+length(five_times_words)
+
+sms_train_freq5 <- DocumentTermMatrix(spam_corpus_train, control=list(dictionary = five_times_words))
+
+sms_test_freq5 <- DocumentTermMatrix(spam_corpus_test, control=list(dictionary = five_times_words))
+
+inspect(sms_train_freq5[100:110, 1600:1610])
+#check the number of features
+ncol(sms_train_freq5)
+ncol(sms_test_freq5)
+
+convert_count <- function(x) {
+  y <- ifelse(x > 0, 1,0)
+  #y <- factor(y, levels=c(0,1), labels=c("No", "Yes"))
+  y=factor(y)#x
+  y
+}
+
+sms_train_freq5 <- apply(sms_train_freq5, 2, convert_count)
+sms_train_freq5[100:110, 1600:1610]
+sms_test_freq5 <- apply(sms_test_freq5, 2, convert_count)
+
+label_yn = factor(labels)#, levels=c(0,1), labels=c("No", "Yes"))
+#label_yn = factor(dfLabeled$prediction)
+str(sms_train_freq5)
+str(sms_test_freq5)
+
+library(e1071)
+#sms_classifier <- naiveBayes(sms_train_freq5, factor(sms_raw_train$labels))
+#class(sms_classifier)
+#sms_test_pred <- predict(sms_classifier, factor(sms_test_freq5))
+
+#data(iris)
+#m <- naiveBayes(Species ~ ., data = iris)
+## alternatively:
+#m <- naiveBayes(iris[,-5], iris[,5])
+#m
+#table(predict(m, iris[,-5]), iris[,5])
+
+ast = data.frame(sms_test_freq5)
+as = cbind(data.frame(sms_train_freq5),label_yn[1:1750])
+sms_classifier <- naiveBayes(as[,-length(as)], as[,length(as)])
+class(sms_classifier)
+sms_test_pred <- predict(sms_classifier, ast[1:750,])
+
+
+#sms_classifier <- naiveBayes(sms_raw_train , factor(sms_raw_train$labels))
+#sms_test_pred <- predict(sms_classifier, sms_raw_test$text)
+
+table(sms_test_pred, sms_raw_test$prediction)
+sms_test_pred
+truthVector <- sms_test_pred == sms_raw_test$prediction
+good = length(truthVector[truthVector==TRUE])
+bad = length(truthVector[truthVector==FALSE])
+good/(good+bad)
+table(sms_test_pred,sms_raw_test$prediction)
+
+```
+
+
+SVM
+```{r SVM}
+library("e1071")
+head(iris,5)
+attach(iris)
+x <- subset(iris, select=-Species)
+y <- Species
+x
+y
+svm_model <- svm(x,y)
+summary(svm_model)
+
+pred <- predict(svm_model,x)
+table(pred,y)
+
+# evaluation, danger!! we use the same set of data for test and train!
+sum(pred == y)/nrow(iris)
+
+# --> divide data set in train and test, then use the train to build the svm model 
+# and test to predict the results and measure the classifier quality
+detach(iris)
+```
+
+
+
+SVM mit Split Train- und Testdaten
+```{r acc_classification}
+#set the working directory specific to my machine
+setwd("/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data1")
+
+
+#create a data frame from all files in specified folder
+create_activity_dataframe = function(activityFolder,classId) {
+  file_names = dir(activityFolder)
+  file_names = lapply(file_names, function(x){ paste(".",activityFolder,x,sep = "/")})
+  your_data_frame = do.call(rbind,lapply(file_names,function(x){read.csv(x,header = FALSE,sep = " ")}))
+  your_data_frame = cbind(data.frame(rep(classId,nrow(your_data_frame))),your_data_frame)
+  your_data_frame = cbind(data.frame(1:nrow(your_data_frame)),your_data_frame)
+  colnames(your_data_frame) = c("timestep","class","x","y","z")
+  your_data_frame = cbind(mean(your_data_frame$x),mean(your_data_frame$y),mean(your_data_frame$z),your_data_frame)
+  colnames(your_data_frame) = c("mx","my","mz","timestep","class","x","y","z")
+  your_data_frame
+}
+
+df1 = create_activity_dataframe("Brush_teeth",1)
+df2 = create_activity_dataframe("Climb_stairs",2)
+df = rbind(df1,df2)
+head(df)
+dim(df)
+library(e1071)
+
+#SPLIT
+# divide the indexes in train and test
+sample <- sample.int(nrow(df), floor(.75*nrow(df)), replace = F)
+dftrain <- df[sample, ]
+dftest <- df[-sample, ]
+#xtrain <- subset(dftrain, select=-dftrain$class) # remove the label
+xtrain = cbind(dftrain$mx,dftrain$my,dftrain$mz)#,dftrain$x,dftrain$y,dftrain$z)
+ytrain <- dftrain$class
+dim(xtrain)
+
+#xtest <- subset(dftest, select=-dftest$class) # remove the label
+xtest = cbind(dftest$x,dftest$y,dftest$z)#,dftest$x,dftest$y,dftest$z)
+ytest <- dftest$class
+dim(xtest)
+
+# train the model
+svm_model <- svm(xtrain,ytrain)
+# use the model to predict the test set
+pred <- predict(svm_model,xtest)
+# evaluate
+truthVector = round(pred) == ytest
+good = length(truthVector[truthVector==TRUE])
+bad = length(truthVector[truthVector==FALSE])
+good/(good+bad)
+```
+
+
+#### Vorlesung 4
+Classification Overview
+```{r classOverview}
+library("e1071")
+library(class)
+library(scatterplot3d)
+head(iris,5)
+scatterplot3d(iris[,1],iris[,4],iris[,3], highlight.3d=TRUE, col.axis="blue", col.grid="lightblue", main="scatterplot3d - 1", pch=20)
+set.seed(1234)
+
+# prepare data
+ind <- sample(2, nrow(iris), replace=TRUE, prob=c(0.6, 0.4))
+trainData_with_label <- iris[ind==1,]
+testData_with_label <- iris[ind==2,]
+
+trainData <- trainData_with_label[-5]
+testData <- testData_with_label[-5]
+
+dim(trainData)
+dim(testData)
+
+iris_train_labels <- trainData_with_label$Species 
+iris_test_labels <- testData_with_label$Species 
+
+
+# SVM
+svm_model <- svm(trainData,iris_train_labels)
+#summary(svm_model)
+
+pred <- predict(svm_model,testData)
+table(pred,iris_test_labels)
+
+# evaluation, danger!! we use the same set of data for test and train!
+truthVectorValidate_svm = pred == iris_test_labels
+good = length(truthVectorValidate_svm[truthVectorValidate_svm==TRUE])
+bad = length(truthVectorValidate_svm[truthVectorValidate_svm==FALSE])
+good/(good+bad)
+
+# --> divide data set in train and test, then use the train to build the svm model 
+# and test to predict the results and measure the classifier quality
+
+
+
+# naive-bayes
+m <- naiveBayes(trainData, iris_train_labels)
+pred_nb = predict(m, testData)
+table(pred_nb, iris_test_labels)
+
+truthVectorValidate_nb = pred_nb == iris_test_labels
+good = length(truthVectorValidate_nb[truthVectorValidate_nb==TRUE])
+bad = length(truthVectorValidate_nb[truthVectorValidate_nb==FALSE])
+good/(good+bad)
+
+
+
+# KNN
+pred_knn <- knn(train = trainData, test = testData, cl= iris_train_labels,k = 3,prob=TRUE) 
+table(pred_knn, iris_test_labels)
+
+truthVectorValidate_knn = pred_knn == iris_test_labels
+good = length(truthVectorValidate_knn[truthVectorValidate_knn==TRUE])
+bad = length(truthVectorValidate_knn[truthVectorValidate_knn==FALSE])
+good/(good+bad)
+
+```
+
+
+Association Rules  
+
+APRIORI
+```{r aprioriBsp}
+library(arules)
+row1=cbind(0,1,0,1,0,1)
+row2=cbind(0,1,0,1,0,1)
+row3=cbind(1,0,1,0,1,1)
+row4=cbind(0,1,0,1,0,1)
+df=rbind(row1,row2,row3,row4)
+rules <- apriori(df, parameter = list(supp = 0.5, conf = 0.9, target = "rules"))
+inspect(rules)
+```
+
+ECLAT  
+gleiches Beispiel wie oben mit APRIORI
+```{r eclatBsp}
+itemset <- eclat(df, parameter = list(supp=0.5))
+inspect(itemset)
+rules <- ruleInduction(itemset, confidence = 0.5)
+inspect(rules)
+```
+
+Gemeinsames Beispiel
+```{r arules}
+library(arules)
+
+# ETL START
+
+# set working directory
+setwd("/Users/Daniel/Documents/Daniel/Ausbildung/BFH/CAS Datenanalyse/Data Mining/Data Mining/data3")
+
+# read file
+transactions <- readLines("groceries.csv")
+
+# turn comma into array separator
+out <- strsplit(transactions, split = ',')
+
+# create unique list of articles
+articles <- data.frame(unique(unlist(out)))
+
+# set meta information on data frame
+names(articles) <- c("articles'")
+
+# creation of a matrix having item names as columns
+
+# creating matrix with 0 as Default with dim (transactions, number_of_items)
+m <- matrix(c(0), nrow=length(transactions), ncol=nrow(articles))
+colnames(m) <- articles[,]
+
+# fill in the file contents to the matrix
+fill_matrix <- function(matrix, transactions) {
+  tx_id = 1
+  for (tr in transactions) {
+    item <- strsplit(tr, split = ',')
+    for (i in item) {
+      matrix[tx_id, i] = 1
+    }
+    tx_id = tx_id + 1
+  }
+  return(matrix)
+}
+
+binary_matrix <- fill_matrix(m, transactions)
+
+str(binary_matrix)
+dim(binary_matrix)
+head(binary_matrix)
+
+# ETL STOP
+
+# APRIORI
+rules <- apriori(binary_matrix, parameter = list(supp = 0.05, conf = 0.1, target = "rules", maxlen=2))
+inspect(rules)
+
+# ECLAT
+#rawRules  <- eclat(binary_matrix, parameter = list(support = 0.0008))
+rawRules  <- eclat(binary_matrix, parameter = list(support = 0.002))
+rules <- ruleInduction(rawRules)
+inspect(rules)
+
+
+# FP growth
+# see possible implementation: http://www.borgelt.net/doc/fpgrowth/fpgrowth.html
+
+```
+
+
+```{r eclat}
+data("Adult")
+## Mine itemsets with minimum support of 0.1 and 5 or less items
+itemsets <- eclat(Adult,parameter = list(supp = 0.1, maxlen = 5))
+itemsets
+inspect(itemsets)
+
+## Create rules from the itemsets
+rules <- ruleInduction(itemsets, Adult, confidence = .9)
+rules
+summary(rules)
+inspect(head(rules))
+```
+
+
+
+#### Vorlesung 5
+
+```{r }
+
+```
+

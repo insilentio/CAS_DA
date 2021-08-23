@@ -1,0 +1,309 @@
+---
+title: "Übung 2"
+output: 
+  html_document: 
+    toc: yes
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(ggplot2)
+library(e1071)
+library(moments)
+presi <- read_excel("Übung 2.xlsx")
+old.options <- options(digits = 3)
+```
+
+
+#### 1. Warum wurde als erklärende Variable das reale und nicht das nominelle BIP pro Kopf ausgewählt?
+Um die Daten über die vielen Jahre mit Inflation vergleichbar zu halten.
+
+#### 2. Warum wurde die Wachstumsrate des realen BIP pro Kopf und nicht des realen BIP des Landes ausgewählt?
+Um die Daten über die wachsende Bevölkerung hinweg vergleichbar zu halten. 
+
+#### 3. Warum wurden die ersten 15 Quartale der Regierungsperiode für die Variable P gewählt?
+Als eine Art Indikator für den "Erfolg" des amtierenden Präsidenten. Für das 16. Quartal fehlen die Daten
+
+#### 4. Warum wurde für die Variable GOODNEWS eine Grenzwachstumsrate von 3.2% ausgewählt?
+für amerikanische Verhältnisse eine aussergewöhnliche Wachstumsrate.
+
+#### 5. Welche Annahme wird im Zwei-Partei Stimmensystem (two-party vote share) getroffen?
+Die anderen Parteien sind insignifikant. Die anderen Parteien nehmen ihre kleinen Anteile gleichmässig von den beiden grossen Parteien weg.
+
+#### 6. Vor den Wahljahren 1924 und 1932 gab es eine Deflation. Für beide Wahljahre wurde eine (positive) Inflationsrate erfasst. Welche Annahme wurde hier getroffen?
+??
+
+#### 7. Erstellen Sie ein Streudiagramm der Variable V (Vote) gegen G (Growth) und P (Inflation). Ist ein Zusammenhang zwischen den Variablen ersichtlich? Geben Sie eine ökonomische Begründung dafür.
+```{r 7, results='hold'}
+ggplot(presi)+
+  aes(x=G,y=V)+
+  geom_point()
+ggplot(presi)+
+  aes(x=P,y=V)+
+  geom_point()
+```
+  
+Es scheint einen gleichläufigen Zusammenhang zu geben bei den Stimmen für die amtierende Partei und dem Wirtschaftswachstum.
+
+#### 8. Zeigen Sie die Reihen G (Growth) und V (VOTE) als Scatter-Plot mit Regressionslinie an. Wurde die jeweilige Regierungspartei bei negativen Wachstumsraten häufiger abgewählt als im Amt bestätigt?
+```{r 8}
+ggplot(presi)+
+  aes(x=G,y=V)+
+  geom_point()+
+  geom_vline(xintercept=0)+
+  geom_hline(yintercept=50)+
+  stat_smooth(method = "lm", se=F)
+```
+
+Bei negativem Wachstum wurde die amtierende Partei 4 Mal abgewählt und nur 2 Mal bestätigt.
+
+#### 9. Welche Stichprobenperiode wurde ausgewählt? Wie viele Beobachtungen gibt es insgesamt?
+```{r 9}
+range(presi$year)
+nrow(presi)
+```
+
+
+#### 10. Aus welchen Gründen wurden die Wahljahre vor 1916 nicht berücksichtigt? Nennen Sie drei Gründe.
+* mehr als 2 Parteien, die Kandidaten stellten
+* Datenqualität von G und P
+* ??
+
+#### 11. Schätzen Sie das Modell1: V = β1 + β2G + u
+```{r 11}
+mod1 <- lm(V~G,data=presi)
+smod1 <- summary(mod1)
+summary(mod1)
+```
+
+
+#### 12. Interpretieren Sie die geschätzten Regressionsparameter.
+Die Stimmen der amtierenden Partei starten bei 50.87%. Pro zusätzliches Prozent Wirtschaftswachstum nimmt der Stimmenanteil durchschnittlich um 0.886 ceteris paribus zu.
+
+#### 13. Erklären Sie was das Signifikanzniveau α darstellt. Interpretieren Sie konkret den Wert α = 5%.*
+
+Beschreibt die maximal zulässige Irrtumswahrscheinlichkeit: mit welcher Wahrscheinlichkeit erlaubt man, die Nullhypothese fälschlicherweise zu verwerfen.  
+Bei α = 5% bedeutet dies: in 5 von 100 Fällen würde die Nullhypothese verworfen, obwohl sie korrekt wäre.  
+
+#### 14. Ist der geschätzte Steigungsparameter signifikant auf dem 5%-Signifikanzniveau?
+Ja, sogar auf dem 1%-Niveau (p = `r smod1$coefficients[2,4]`).  
+
+#### 15. Sie wollen folgende Nullhypothese testen: Das Wirtschaftswachstum hat keinen Einfluss auf den Stimmenanteil der amtsinhabenden Partei (incumbent party). Stellen Sie die Null- und Alternativhypothese auf.
+H~0~: β~2~ = 0, H~1~: β~2~ ≠ 0.
+
+#### 16. Ermitteln Sie den kritischen Wert der t-Statistik
+```{r 16}
+qt(.05,23, lower.tail = F)
+```
+
+
+#### 17. Berechnen Sie manuell den t-Wert anhand des Standardfehlers.
+β~2~/se(β~2~) = `r smod1$coefficients[2,1]/smod1$coefficients[2,2]`
+
+#### 18. Wie lautet die Entscheidungsregel für die Nullhypothese?
+Die Nullhypothese wird verworfen, wenn der p-Wert < α ist oder der t-Wert > kritischer Wert.
+
+#### 19. Wie lautet die Entscheidungsregel mit dem p-Wert?
+s.o.
+
+#### 20. Interpretieren Sie den p-Wert für Steigungsparameter.
+Der p-Wert beträgt 4.5·10^-5^ und liegt weit unter dem Signifkanzniveau α von 5%. Die Nullhypothese, dass β~2~ = 0 ist, wird somit verworfen. Der Regressionskoeffizient ist statistisch signifikant.
+
+#### 21. Bestimmen Sie das 95%- Konfidenzintervall für den Parameter β2 
+```{r 21}
+me <- qt(.025,23,lower.tail = F)*smod1$coefficients[2,2]
+```
+Konfidenzintervall: β~2~ ± me = `r smod1$coefficients[2,1] + c(-me,me)`
+
+
+#### 22. Bestimmen Sie den kritischen Wert tc für die Berechnung eines 95%-Konfidenzintervalls
+```{r 22}
+qt(.025,23,lower.tail = F)
+```
+
+
+#### 23. Bestimmen Sie manuell ein 95%- Konfidenzintervall für den Parameter β2. Vergleichen Sie es mit dem gretl Intervall (Frage 14). Interpretieren Sie konkret das 95%-Konfidenzintervall.
+s. 21
+Interpretation: Der Parameter β~2~ liegt mit einer Wahrscheinlichkeit von 95% im Intervall `r smod1$coefficients[2,1] + c(-me,me)`.
+
+#### 24. Interpretieren Sie konkret den R2-Wert.
+Das Bestimmtheitsmass R^2^ beschreibt den Anteil der durch die Regressionsgerade erklärbaren Streuung und beträgt hier `r smod1$r.squared*100`%.
+
+#### 25. Schätzen Sie das Modell 2: V= β1+ β2P+ u
+```{r}
+mod2 <- lm(V~P,data = presi)
+smod2 <- summary(mod2)
+smod2
+```
+
+
+#### 26. Interpretieren Sie den geschätzten Regressionskoeffizienten b2.
+Pro zusätzlichem % Inflationsrate reduziert sich der Stimmenanteil der regierenden Partei durchschnittlich um `r smod2$coefficients[2,1]`%, ceteris paribus.
+
+#### 27. Ist der geschätzte b2-Koeffizient auf dem 5%-Signifikanzniveau signifikant?
+nein, p-Wert ist > α.
+
+#### 28. Stellen Sie die Null- und Alternativhypothese für b2 auf.
+H~0~: β~2~ = 0, H~1~: β~2~ ≠ 0.
+
+#### 29. Wie lautet die Entscheidungsregel, auf deren Basis Sie Ihre Testentscheidung treffen.
+Falls p-Wert < α, wird die Nullhypothese verworfen. 
+
+#### 30. Beurteilen Sie die Anpassungsgüte dieses Modells?
+Mit `r smod2$r.squared` ist R^2^ sehr tief, die Anpassungsgüte ist sehr schlecht.
+
+#### 31. Testen Sie folgende Nullhypothese: „Wenn die Inflationsrate null ist, beträgt der erwartete Stimmenanteil der amtierenden Partei mindestens 50%“.
+??
+H~0~: E(V|P=0)>=50, H~1~: E(V|P=0)<50  
+```{r 31}
+p2 <- predict(mod2, newdata = data.frame(P=0), interval = "p")
+p2
+```
+Da das Konfidenzintervall auch den Bereich kleiner 50% umfasst, kann die Nullhypothese nicht verworfen werden.
+
+#### 32. Bestimmen Sie ein 95%- Konfidenzintervall für den erwarteten Stimmenanteil der amtierenden Partei (VOTE) wenn P = 2 (2% Inflation). Interpretieren Sie konkret Ihr 95%- Konfidenzintervall.
+```{r}
+p2 <- predict(mod2, newdata = data.frame(P=2), interval = "c")
+p2
+```
+??  
+Bei einer Inflation von 2% wird der Stimmenanteil für die amtierende Partei in 95% der Fälle im Bereich [`r p2[2]`,`r p2[3]`] liegen, ceteris paribus.
+
+#### 33. Ein Kollege von Ihnen schlägt das Modell 3 vor: VD = β1+ β2G+ u. Schätzen Sie dieses Modell.
+```{r 33}
+mod3 <- lm(VD~G, data=presi)
+smod3 <- summary(mod3)
+smod3
+```
+
+
+#### 34. Ist der geschätzte b2-Koeffizient signifikant auf dem 5%-Signifikanzniveau?
+nein
+
+#### 35. Warum ist dieses Regressionsmodell nicht geeignet?
+Weder ist der Regressionskoeffizient signifikant noch hat das Bestimmtheitsmass einen brauchbaren Wert.
+Wenn die endogene Variable VD verwendet wird, sollten für die Regression nur Wirtschafsdaten herangezogen werden, wenn die Demokraten im Amt waren.
+
+#### 36. Schätzen Sie das Modell4: V = β1 + β2G + β3P + u
+```{r 36}
+mod4 <- lm(V~G+P, data = presi)
+smod4 <- summary(mod4)
+smod4
+```
+
+
+#### 37. Sind die geschätzten Regressionskoeffizienten b2, b3 signifikant auf dem 10%- Signifikanzniveau?
+b~2~ ist stark signifikant, mit einem p-Wert von `r smod4$coefficients[2,4]`. b~3~ ist nicht signifikant, der p-Wert von `r smod4$coefficients[3,4]` liegt weit über dem Signifikanzniveau von 5%.
+
+#### 38. Stellen Sie dazu die Null- und Alternativhypothese auf. Wie lautet Ihre Konklusion?
+H~0~: β~2~ + β~3~ = 0, H~1~: β~2~ + β~3~ ≠ 0. ??
+
+#### 39. Was ist mit dem Vorzeichen von P (Inflationsrate) passiert?
+In Modell 2 war es noch negativ, nun ist die Korrelation positiv.
+
+#### 40. Nehmen Sie an, dass die Inflationsrate 2% beträgt. Was ist die Vorhersage, wenn die Wachstumsrate i) -2% ii) 0% iii) 2% beträgt.
+```{r}
+predict(mod4, newdata = data.frame(G=-2, P=2))
+predict(mod4, newdata = data.frame(G=0, P=2))
+predict(mod4, newdata = data.frame(G=2, P=2))
+```
+
+
+#### 41. Schätzen Sie das Modell 5: V= β1 + β2G + β3P + β4GOODNEWS + u
+```{r 41}
+mod5 <- lm(V~G+P+GOODNEWS, data = presi)
+smod5 <- summary(mod5)
+smod5
+```
+
+
+#### 42. Sind die geschätzten Regressionskoeffizienten signifikant auf dem 5%-Signifikanzniveau?
+G deutlich, GOODNEWS gerade noch so knapp
+
+#### 43. Interpretieren Sie den geschätzten Regressionskoeffizienten b4?
+Pro zusätzliche Goodnews, ie. pro zusätzliches Quartal mit mehr als 3.2% Wachstumsrate erhält die amtierende Partei im Durchschnitt `r smod5$coefficients[4,1]`% mehr Stimmen, ceteris paribus.
+
+#### 44. Schätzen Sie das Modell 6: V= β1 + β2G+ β3GOODNEWS + u
+```{r 44}
+mod6 <- lm(V~G+GOODNEWS, data = presi)
+smod6 <- summary(mod6)
+smod6
+```
+
+
+#### 45. Sind die geschätzten Regressionskoeffizienten signifikant auf dem 5%-Signifikanzniveau?
+G ist signifikant, GOODNEWS knapp nicht.
+
+#### 46. Welches Regressionsmodell würden Sie anhand des adjustierten Bestimmtheitsmasses auswählen?
+```{r 46}
+smod <- c(smod1, smod2, smod3, smod4, smod5, smod6)
+ars <- c()
+for (i in 1:length(smod)) {
+  ars <- c(ars,smod[i]$adj.r.squared)
+}
+names(ars) <- c(1:6)
+sort(ars, decreasing = T)
+```
+
+
+#### 47. Testen Sie folgende alternative Hypothese für Modell 6: “Die amtierende Partei erlangt die Stimmenmehrheit, wenn die Wachstumsrate 2% und die Anzahl Quartale mit einer Wachstumsrate höher als 3.2% 2 beträgt“. Nehmen Sie ein Signifikanzniveau von 5% an.
+
+H~0~: c~1~b~2~ ± c~2~b~3~ = c, H~1~: c~1~b~2~ ± c~2~b~3~ > c
+```{r 47}
+c1 <- 2
+c2 <- 2
+sev <-  sqrt(1.6047)
+t6 <- v/sev
+t6
+```
+??
+
+#### 48. Versetzen Sie sich nun zurück ins Jahr 2016 kurz vor der Präsidentschaftswahl vom 8. November 2016. Zu diesem Zeitpunkt haben Sie noch keine Information über den Wahlausgang. Berechnen Sie die Vorhersage des Wählerstimmenanteils bei folgenden Werten mittels Modellen 5 und 6: G = 0.97% P= 1.42% und Goodnews = 2 im Jahr 2016.
+```{r 48}
+p5 <- predict(mod5, newdata = data.frame(G=.97, P=1.42, GOODNEWS=2))
+p6 <- predict(mod6, newdata = data.frame(G=.97, GOODNEWS=2))
+p5
+p6
+```
+
+
+#### 49. Berechnen Sie den Prognosefehler für beide Modelle 5 und 6. Die Wahlergebnisse (popular vote) waren 48.02% für Clinton und 46.05% für Trump.
+Modell 5: 48.02% - `r p5` = `r 48.02-p5`%  
+Modell 6: 48.02% - `r p6` = `r 48.02-p6`%
+
+
+#### 50. Welches Modell hat die beste Prognose des Wählerstimmenanteils geliefert?
+Modell 6
+
+#### 51. Warum wurde Trump als Präsident gewählt, obwohl Hillary Clinton mehr Stimmen (popular vote) bekommen hat?
+Majorzwahl: the winner takes it all. Pro Staat werden alle Wahlmännerstimmen dem proportionalen Sieger zugeteilt.
+
+#### 52. Reduzieren Sie die Stichprobe für die Regression auf die Zeitperiode 1916-2008.
+```{r 52}
+presi08 <- presi[1:24,]
+```
+
+
+#### 53. Schätzen Sie das Modell für die Zeitperiode 1916-2008 (Beobachtungen 1 bis 24). Modell 7: V= β1 + β2G + β3GOODNEWS + u
+```{r 53}
+mod7 <- lm(V~G+GOODNEWS, data = presi08)
+smod7 <- summary(mod7)
+smod7
+```
+
+
+#### 54. Sind die geschätzten Regressionskoeffizienten signifikant auf dem 5%-Niveau?
+Ja, sowohl G als auch GOODNEWS.
+
+#### 55. Berechnen Sie die Vorhersage des Wählerstimmenanteils der amtierenden Partei mit den folgenden Werten: G = 1.42, P = 1.47 und Goodnews = 1.
+```{r 55}
+p7 <- predict(mod7, newdata = data.frame(G=1.42, GOODNEWS=1))
+p7
+```
+
+
+#### 56. Berechnen Sie unter Berücksichtigung des tatsächlichen Wahlergebnisses den Vorhersagefehler (f) für 2012. Wahlergebnis: 51.1% für Obama gegen 47.2% für Mitt Romney
+Der Fehler beträgt `r 51.1 - p7`%  
+??

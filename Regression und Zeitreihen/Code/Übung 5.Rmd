@@ -1,0 +1,290 @@
+---
+title: "Übung 5"
+output: 
+  html_document: 
+    toc: yes
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl) 
+library(dplyr)
+library(car)
+library(e1071)
+library(ggplot2)
+ceo <- read.csv("Übung 5_CEOs.csv", sep=";")
+```
+
+#### 1. Welche anderen Unternehmensvariablen könnten die Gehaltshöhe eines CEOs bestimmen?
+Ausbildung, Erfahrung, Alter, Geschlecht, ...
+
+#### 2. Erstellen Sie folgende logarithmierte Variablen:  
+l_salary =ln(salary)  
+l_sales = ln(sales)  
+l_mktval = ln(mktval)  
+```{r 2}
+ceo <- ceo %>%
+  mutate(l_salary = log(SALARY), l_sales = log(SALES), l_mktval = log(MKTVAL))
+```
+
+
+#### 3. Analysieren Sie folgende Variablen: salary, sales, mktval, profits, und deren entsprechenden Logarithmen. Gibt es negative Zahlen? Welche Variable weist den grössten Variationskoeffizienten auf?
+```{r 3}
+stat <- summary(ceo)
+stat <- rbind(stat, paste("VarCoef:",round(sapply(ceo, sd)/sapply(ceo, mean),4)," ", sep = ""))
+stat <- rbind(stat, paste("Skew:   ",round(sapply(ceo, skewness),4)," ", sep = ""))
+stat
+which(stat[7,] == max(stat[7,]))
+```
+Es gibt negative Profits. Profits haben auch den grössten Variationskoeffizienten
+
+#### 4. Welche Variable hat die grösste Schiefe? Warum haben wir hier nur rechtsschiefe Verteilungen für die nicht-logarithmierten Variablen?
+```{r 4}
+which(stat[8,] == max(stat[8,]))
+```
+Sales hat die grösste Schiefe. Weil es kein Querschnitt ist, sondern Top100 oder so.
+
+
+#### 5. Folgende Tabelle fasst die Schiefe diverser Variablen und deren Logarithmen zusammen. Vergleichen Sie die Schiefen. Was stellen Sie fest?
+Obwohl Schiefe von Sales grösser ist als Schiefe von Marketvalue, ist es bei den logarithmierten Werten nach der Stauchung umgekehrt.
+
+#### 6. Vergleichen Sie die Histogramme der Variablen salary und l_salary. Was beobachten Sie?
+```{r 6}
+ggplot(ceo)+
+  geom_histogram(aes(x=SALARY), bins = 13)
+ggplot(ceo)+
+  geom_histogram(aes(x=l_salary), bins = 13)
+```
+  
+Das absolute Histogramm ist stark rechtsschief. Das logarithmierte ist annähernd normalverteilt.
+
+#### 7. Schätzen Sie ein Regressionsmodell, welches das jährliche CEO-Gehalt anhand des Unternehmensumsatzes (sales) und des Marktwertes (mktval) erklärt. Spezifizieren Sie hierzu das Modell so, dass Sie für beide erklärenden Variablen konstante Elastizitäten schätzen.
+```{r 7}
+mod1 <- lm(l_salary~l_sales+l_mktval, ceo)
+summary(mod1)
+```
+
+
+#### 8. Interpretieren Sie das Interzept (b1). Wie lautet die Interpretation anhand der ursprünglichen Variable y?
+Der SALARY startet bei exp(4.62) = `r exp(4.62)` kUSD bei einem Umsatz von 1 Mio. (ln(sales) = 0) und einer Börsenkapitalisierung von 1 Mio.
+
+#### 9. Interpretieren Sie die geschätzten Steigungskoeffizienten (b2, b3).
+Steigerung des Umsatzes um 1% führt zu einer durchschnittlichen Steigerung des Lohnes um 0.16%, c.p.  
+Steigerung des Marketvalues um 1% führt zu einer Steigerung des Lohnes um 0.11% c.p.
+
+#### 10. Gibt es einflussreiche Beobachtungen? Berechne Sie Schranke für grosse Datensätze?
+Schranke für einen grossen Datensatz: 2(K/N)^0.5^  
+```{r 10}
+2*(3/nrow(ceo))^.5
+```
+
+
+
+#### 11. Fügen Sie nun die Variable profits hinzu und schätzen Sie das neue Modell. Warum kann diese Variable nicht in logarithmierter Form aufgenommen werden?
+```{r 11}
+mod2 <-  lm(l_salary~l_sales+l_mktval+PROFITS, ceo)
+summary(mod2)
+```
+Da sie negative Werte annimmt.
+
+#### 12. Sind die Koeffizienten individuell signifikant auf dem 5%-Signifikanzniveau?
+Nur l_sales.
+
+#### 13. Beurteilen Sie die Anpassungsgüte dieses Modells. Interpretieren Sie konkret den R2-Wert?
+Nicht sehr hoch: Das Modell erklärt 30% der Variation von ln(y).
+
+#### 14. Berechnen Sie den R^2^ bezogen auf die ursprüngliche Variable y (salary)
+```{r 14}
+r1 <- cor(ceo$SALARY,exp(mod1$fitted.values))
+r1**2
+r2 <- cor(ceo$SALARY, exp(mod2$fitted.values))
+r2**2
+```
+--> Modell 2 erklärt 22.3% der Varianz des CEO-Gehalts.
+
+#### 15. Vergleichen Sie die adjustierten R^2^ (Modelle 1 und 2)? Was würde dadurch nahegelegt werden?
+Mod1 hat besseren Wert --> wäre besser geeignet.
+
+#### 16. Interpretieren Sie den geschätzten Koeffizienten von profits.
+Eine Erhöhung des Profits um 1kUSD führt näherungsweise zu einer Erhöhung des Salarys um 3.5*10^-3^%, c.p.
+
+#### 17. Warum könnte es dennoch Sinn machen, beide Variablen l_mktval und profits in die Regression aufzunehmen?
+Individuelle Signifikanz hat nichts mit kombinierter Signifikanz zu tun.
+
+#### 18. Ermitteln Sie die Korrelation zwischen l_sales und profits. Regressieren Sie dazu profits auf l_sales. Erläutern Sie damit die Konsequenzen der Hinzunahme von profits in Bezug auf die Koeffizienten, Standardfehler und t-Statistik.
+```{r 18}
+summary(lm(PROFITS~l_sales, ceo))
+```
+Profits und l_sales haben eine recht starke Korrelation: Zunahme von Sales um 1% führt zu Zunahme von Profit von 1.71kUSD. Standarfehler ist 0.17kUSD, der t-Wert liegt weit über dem kritischen Wert.
+
+#### 19. Ermitteln Sie die Korrelation zwischen den Variablen l_mktval und profits mittels Regression. Sind diese Variablen stark korreliert? Was hat dies für Konsequenzen für die Koeffizienten, deren Standardfehler und t-Statistik?
+```{r 19}
+summary(lm(PROFITS~l_mktval, ceo))
+```
+Hier besteht eine starke Korrelation mit R^2^ von 60%. 
+
+#### 20. Fügen Sie nun die Variable ceoten hinzu und schätzen Sie das Modell 3:
+l_salary = β1 + β2 l_sales + β3 l_mktval + β4 profits + β5 ceoten + u
+```{r 20}
+mod3 <- lm(l_salary~l_sales+l_mktval+PROFITS+CEOTEN, ceo)
+summary(mod3)
+```
+
+
+#### 21. Warum wurde die Variable ceoten nicht logarithmiert im Modell aufgenommen?
+Zeitmerkmale (Jahre) werden nicht logarithmiert.
+
+#### 22. Interpretieren Sie den Koeffizienten bCEOTEN.
+Pro Jahr als CEO im Unternehmen erhöht sich der Lohn um `r mod3$coefficients[5]*100`% c.p.
+
+#### 23. Wie hat sich das adjustierte Bestimmtheitsmass gegenüber Modell 2 geändert?
+Es hat sich um `r summary(mod3)$adj.r.squared - summary(mod2)$adj.r.squared` geändert und somit marginal verbessert.
+
+
+#### 24. Erstellen Sie die Variable ceoten2 = ceoten^2^.
+```{r 24}
+ceo$CEOTEN2 <- ceo$CEOTEN**2
+```
+
+
+#### 25. Fügen Sie nun die Variable ceoten2 hinzu und schätzen Sie das Modell 4.
+l_salary = β1 + β2 l_sales + β3 l_mktval + β4 profits + β5ceoten + β6ceoten^2^ + u
+```{r 25}
+mod4 <- lm(l_salary~l_sales+l_mktval+PROFITS+CEOTEN+CEOTEN2, ceo)
+summary(mod4)
+```
+
+
+#### 26. Wie hat sich das adjustierte Bestimmtheitsmass gegenüber Modell 3 geändert?
+Es hat sich um `r summary(mod4)$adj.r.squared - summary(mod3)$adj.r.squared` verbessert.
+
+#### 27. Erklären Sie im Allgemeinen, warum quadrierte Variablen in die Regression aufgenommen werden.
+Weil nicht alle Einflüsse linear sind. So können Grenzeffekte (= marginale Effekte) überprüft (Zu- oder Abnahme) werden.
+
+#### 28. Berechnen Sie den Grenzeffekt der Anzahl Jahre als CEO auf das CEO-Gehalt (y). Erklären Sie was dieser Grenzeffekt darstellt.
+Δy' = b5 + 2*b6*CEOTEN = 0:
+```{r 28}
+mod4$coefficients[5]/(2*mod4$coefficients[6]*(-1))
+```
+Der Grenzeffekt beträgt 18.6 Jahre. D.h. ab 19 Jahren als CEO wird die Lohnentwicklung negativ.  
+Allgmein: wie verändert sich der CEO-Lohn für die Zunahme der Variable um eine Einheit (marginale Änderung).
+
+
+#### 29. Berechnen Sie den Grenzeffekt ∂ln(salary)/∂ceoten für einen CEO, welcher seit 10 bzw. 20 Jahren CEO des Unternehmens ist. Interpretieren Sie Ihre Ergebnisse.
+```{r 29}
+mod4$coefficients[5] + 2*mod4$coefficients[6]*10
+mod4$coefficients[5] + 2*mod4$coefficients[6]*20
+```
+Nach 10 Jahren ist die Lohnentwicklung mit 2% noch positiv, nach 20 Jahren mit -0.3% negativ.  
+
+#### 30. Liegt ein ab- oder ein zunehmender Grenzeffekt der Anzahl Jahre als CEO auf das CEO- Gehalt vor? Begründen Sie Ihre Antwort. Anschliessend interpretieren Sie diesen Effekt.
+Ein abnehmender, da der Koeffizient der quadrierten Variable negativ ist. Jedes Jahr nimmt der Zuwachs des Gehalts um `r 2*mod4$coefficients[6]` ab.
+
+#### 31. Ist der Grenzeffekt bei wenigen Erfahrungsjahren als CEO positiv oder negativ? Interpretieren Sie diesen Effekt.
+Positiv. Solange der abnehmende Zuwachs in der Summe noch über 0 liegt, nimmt das Gehalt noch zu.
+
+#### 32. Ab welcher Anzahl Jahre ist ein negativer Einfluss der Variable ceoten auf das Gehalt zu erwarten?
+siehe 28
+
+#### 33. Wie viele CEO’s mit Erfahrungsjahren im Unternehmen oberhalb bzw. unterhalb des Parabel- Scheitelpunktes sind in der Stichprobe enthalten? Wie ist das Ergebnis bzgl. ceoten2 daher zu interpretieren?
+```{r 33}
+hist(ceo$CEOTEN)
+sum(ceo$CEOTEN > mod4$coefficients[5]/(2*mod4$coefficients[6]*(-1)))
+```
+Nur 17 von 177 sind länger als 18.6 Jahre CEO. Das Ergebnis ist mit Vorsicht zu geniessen.
+
+#### 34. Schätzen Sie das CEO-Gehalt für einen Umsatz von 5‘000 (= $5 Milliarden, da die Einheit Millionen ist), mktval = 10‘000 (= $10 Milliarden), und ceoten = 10 Jahre und profits = 0. Nehmen Sie die Schätzung mit Modell 3 und Modell 4 vor und vergleichen Sie Ihre Ergebnisse.
+```{r 34}
+psales <- 5000
+pmkt <- 10000
+pceo <- 10
+pprofit <- 0
+
+# Mod. 3
+s3 <- predict(mod3, newdata = data.frame(l_sales=log(psales), l_mktval=log(pmkt), PROFITS=pprofit, CEOTEN=pceo))
+exp(s3)
+#oder händisch:
+exp(mod3$coefficients[1]+mod3$coefficients[2]*log(psales)+mod3$coefficients[3]*log(pmkt)+mod3$coefficients[4]*pprofit+mod3$coefficients[5]*pceo)
+
+#vs. Mod. 4
+s4 <- predict(mod4, newdata = data.frame(l_sales=log(psales), l_mktval=log(pmkt), PROFITS=pprofit, CEOTEN=pceo, CEOTEN2=pceo**2))
+exp(s4)
+```
+Gemäss Modell 4 verdient der CEO bei gleichen Bedingungen `r exp(s4) - exp(s3)` kUSD mehr.
+
+#### 35. Erklären Sie was die Gewinnmarge eines Unternehmens ist. Welchen Zusammenhang erwarten Sie zwischen der Gewinnmarge und dem CEO-Gehalt?
+Der prozentuale Anteil des Gewinns am Umsatz. Wir erwarten einen linearen gleichsinnigen Zusammenhang.
+
+#### 36. Kreieren Sie die neue Reihe profmarg für die Gewinnmarge
+Hinweis: profit margin = profits / sales
+```{r 36}
+ceo$profmarg <- ceo$PROFITS/ceo$SALES
+```
+
+
+#### 37. Schätzen Sie folgendes Modell und erklären Sie den Einfluss von profmarg:
+Modell 5: l_salary = β1 + β2l_sales + β3 l_mktval + β4profmarg + β5ceoten + β6ceoten^2^ + u
+```{r 37}
+mod5 <- lm(l_salary~l_sales+l_mktval+profmarg+CEOTEN+CEOTEN2, ceo)
+summary(mod5)
+```
+Die Marge hat einen negativen Einfluss auf das Gehalt. Allerdings ist der Koeffizient nicht signfikant.
+
+#### 38. Interpretieren Sie die geschätzten Koeffizienten b3 und b4.
+Bei einem Prozent Zunahme des Marktwerts steigt der Lohn um 0.12% c.p.  
+Bei einer Zunahme der Marge um 1% sinkt der Lohn um `r 100*mod5$coefficients[4]/1000` Einheiten. (unter Annahme, dass Profits in kUSD sind und Sales in MUSD)
+
+#### 39. Fügen Sie nun die Variable comten hinzu und schätzen Sie das Modell 6:
+l_salary = β1 + β2 l_sales + β3 l_mktval + β4 promarg + β5ceoten + β6 ceoten^2^ + β7comten +u  
+```{r 39}
+mod6 <- lm(l_salary~l_sales+l_mktval+profmarg+CEOTEN+CEOTEN2+COMTEN, ceo)
+summary(mod6)
+```
+
+
+##### i. Wie hat sich das adjustierte Bestimmtheitsmass gegenüber Modell 5 geändert?
+Es hat sich um `r summary(mod6)$adj.r.squared - summary(mod5)$adj.r.squared` erhöht.
+
+##### ii. Interpretieren Sie den geschätzten Koeffizienten bcomten.
+Pro Jahr Firmenzugehörigkeit nimmt der Lohn um 0.8% ab c.p.
+
+##### iii. Wie erklären Sie das negative Vorzeichen für bcomten?
+Abnützungserscheinungen.
+
+#### 40. Schätzen Sie folgendes Modell 7:
+ln(salary) = β1 + β2 ln(sales) + β3 ln(mktval) + β4 promarg + β5ceoten + β6 ceoten^2^ + β7comten + β8comten^2^ +u  
+```{r 40}
+ceo$COMTEN2 <- ceo$COMTEN**2
+mod7 <- lm(l_salary~l_sales+l_mktval+profmarg+CEOTEN+CEOTEN2+COMTEN+COMTEN2, ceo)
+summary(mod7)
+```
+
+
+#### 41. Ergibt es einen Sinn, die Variable comten2 in die Regression aufzunehmen?
+Nein, der Einfluss ist nicht signifikant und marginal. Ausserdem nimmt adj. R^2^ ab.
+
+#### 42. Welche Koeffizienten im Modell 7 sind individuell statistisch nicht signifikant?
+```{r 42}
+smod7 <- summary(mod7)
+smod7$coefficients[,4] < 0.05
+```
+
+
+#### 43. Sind die Koeffizienten b4, b7 und b8 gemeinsam signifikant? Führen Sie einen F-Test durch.
+Ja, der p-Wert liegt unter 5%. Die H0 (sind gemeinsam nicht signfikant) kann verworfen werden.
+
+#### 44. Sind die Koeffizienten b7 und b8 gemeinsam signifikant? Führen Sie einen F-Test durch.
+Ja, der p-Wert liegt unter 5%. Die H0 (sind gemeinsam nicht signfikant) kann verworfen werden.
+
+#### 45. Welches Regressionsmodell würden Sie vorziehen? Begründen Sie Ihre Antwort.
+Auflistung der Regressionsmodelle:  
+Modell 1: l_salary = 4.621 + 0.162 l_sales + 0.107 l_mktval  
+Modell 2: l_salary = 4.687 + 0.161 l_sales + 0.0975 l_mktval + 0.0000357profits  
+Modell 3: l_salary = 4.558 + 0.162 l_sales + 0.1018l_mktval + 0.000029profits + 0.0117ceoten  
+Modell 4: l_salary = 4.441 + 0.164 l_sales + 0.0984 l_mktval + 0.000039 profits + 0.0452ceoten -0.00121ceoten^2^  
+Modell 5: l_salary = 4.36 + 0.160 l_sales + 0.115 l_mktval – 0.286profmarg + 0.046ceoten - 0.00124ceoten^2^  
+Modell 6: l_salary = 4.438 + 0.187 l_sales + 0.1013 l_mktval – 0.256profmarg + 0.048ceoten - 0.00114ceoten^2^ – 0.008498 comten  
+Modell 7: l_salary = 4.424 + 0.186 l_sales + 0.1018 l_mktval – 0.257profmarg + 0.0477ceoten - 0.00112ceoten^2^ – 0.006063 comten – 0.000054 comten^2^  
+
+Modell 6, da bestes R^2^, tiefstes AKAIKE und zweittiefstes SIC Kriterium.

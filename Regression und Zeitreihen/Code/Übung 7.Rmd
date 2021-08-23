@@ -1,0 +1,186 @@
+---
+title: "Übung 7"
+output: 
+  html_document: 
+    toc: yes
+    toc_depth: 5
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl) 
+library(dplyr)
+library(car)
+library(e1071)
+library(ggplot2)
+library(TTR)
+
+strom <- read_excel("Übung 7_ZR.xlsx", skip = 1)
+strom <- ts(strom, frequency = 4, start = c(2010,1))
+```
+
+#### 1. Erklären Sie den Unterschied zwischen der Regressionsanalyse und Zeitreihenanalyse
+Regressionsanalyse ist ein statistisches Verfahren mit dem Ziel, Beziehungen zwischen einer abhängigen und einer oder mehreren unabhängigen Variablen zu erklären. Entwicklung wird durch "äussere" Variablen erklärt.
+Zeitreihenanalyse ist eine Spezialform davon, wobei die unabhängige Variable die diskrete Zeit ist. Entwicklung wird aus sich selbst heraus erklärt --> innere Methode.
+
+#### 2. In welche Komponenten lassen sich ökonomische Zeitreihen zerlegen? Wie lassen sich die Komponenten inhaltlich erklären?
+Systematische -> Glatte -> Trend
+Systematische -> Glatte -> Konjunktur
+Systematische -> Saison
+Restkomponente
+
+#### 3. Nennen Sie 5 verschiedene Zwecke der Zeitreihenanalyse
+Deskription, Diagnose, Prognose, Struktur und Mustererkennung, Kontrolle
+
+#### 4. Sie erhalten die vierteljährliche Stromproduktion eines Kraftwerks und wollen die Zeitreihe mit unterschiedlichen Verfahren glätten. Erstellen Sie das Zeitreihendiagramm.
+Was beobachten Sie, wenn Sie diese Zeitreihe grafisch anschauen?
+```{r 1_4}
+plot(strom[,2], col="red")
+```
+
+Trend steigt, Saisonalität mit Frequenz 2 (alle 2 Quartale ein Max-Wert)
+
+
+#### 5. Regressieren Sie die Stromproduktion als Funktion der Zeit.
+```{r 5_1}
+summary(lm(Strom~T, as.data.frame(strom)))
+```
+
+
+#### 6. Interpretieren Sie den Steigungskoeffizienten.
+Pro Quartal nimmt der Stromverbrauch um durchschnittlich 4.7GWh zu, c.p.
+--> Beschreibt den Trend
+
+#### 7. Neben der Bestimmung von Trends mittels OLS-Schätzung ist häufig die Glättung von Zeitreihen von Bedeutung. Erklären Sie was mit Glättung einer Zeitreihe gemeint ist.
+Herausrechnen von verschiedenen Komponenten, um näherungsweise eine einfachere, aber repräsentative Kurve zu erhalten.
+
+#### 8. Erklären Sie was ein gleitender Durchschnitt 4-ter Ordnung ist.
+4 konsekutive Zeitreihenwerte fliessen in die Berechnung des Durchschnitts ein.
+
+#### 9. Erstellen Sie mittels gretl die Zeitreihen der nachlaufenden gleitenden Durchschnitte 2-ter und 4-ter Ordnung.
+```{r 1_9}
+ma_Strom2 <- SMA(strom[,2], 2)
+ma_Strom4 <- SMA(strom[,2], 4)
+```
+
+
+#### 10. Zeigen Sie die originale Zeitreihe zusammen mit den beiden gleitenden Durchschnitten.
+```{r 1_10}
+plot(strom[,2], col="red")
+lines(ma_Strom2, col="blue")
+lines(ma_Strom4, col="green")
+```
+
+
+#### 11. Wie viele gleitende Durchschnitte lassen sich an den Rändern nicht berechnen? Welcher Unterschied aus dem Diagramm ist zu vermerken?
+bei 2 einer, bei 4 drei. Je höher die Ordnung, desto später beginnt die geglättete Reihe.
+
+#### 12. Erstellen Sie mittels gretl die Zeitreihen der zentrierten gleitenden Durchschnitte 3-ter und 4- ter Ordnung.
+```{r 1_12}
+## TODO ###################
+maz_Strom3 <- stats::filter(strom[,2],rep(1/3,3), sides=2)
+maz_Strom4 <- stats::filter(strom[,2],rep(1/4,4), sides=2)
+```
+
+
+#### 13. Wie viele gleitende Durchschnitte lassen sich an den Rändern nicht berechnen? Wann fängt der erste Wert der Zeitreihe an?
+bei 3 einer, bei 4 zwei. Um 1 resp. 2 Quartale versetzt.
+
+#### 14. Wann wird die exponentielle Glättung angewendet?
+Wenn man die glatten Komponenen einer Zeitreihe herausfiltern will.
+
+#### 15. Erklären Sie das Verfahren der exponentiellen Glättung. Unterscheiden Sie zwischen den zwei Extremwerten α ≅ 0 und α ≅ 1
+Hier werden ältere Werte der Zeitreihe exponentiell abnehmend gewichtet für die Berechnung des Prognosewerts. α = 1 bedeutet, dass der nächste Wert praktisch direkt aus dem letzten errechnet wird. α = 0 hingegen, dass ältere Werte viel grösseren Einfluss haben  
+
+α klein: grosser Glättungseffekt, wenig Reaktion auf Irregularitäten, schwache Berücksichtigung neuerer Werte  
+α gross: kleiner Glättungseffekt, starke Reaktion auf Irregularitäten, starke Berücksichtigung neuerer Werte
+
+#### 16. Erstellen Sie mittels gretl die Zeitreihen der exponentiellen Glättungen mit den Parameter α =0.3 und 0.6.
+```{r 1_16}
+ema_Strom3 <- HoltWinters(strom[,2], .3, F, F)
+ema_Strom6 <- HoltWinters(strom[,2], .6, F, F)
+```
+
+
+#### 17. Zeigen Sie die originäre Zeitreihe zusammen mit den beiden exponentiellen Glättungen.
+```{r 1_17}
+plot(strom[,2], col="red")
+lines(ema_Strom3$fitted[,1], col="blue")
+lines(ema_Strom6$fitted[,1], col="green")
+```
+
+
+#### 18. Erstellen Sie mittels gretl die Zeitreihen der exponentiellen Glättungen mit den Parameter α = 0.6. Wählen Sie für den Startwert den Durchschnitt der ersten 4 Beobachtungen (ZR4)
+```{r}
+ema_Strom64 <- HoltWinters(strom[,2], .6, F, F, start.periods = 4)
+```
+
+
+
+#### 19. Zeigen Sie die originale Zeitreihe zusammen mit den beiden exponentiellen Glättungen mit α = 0.6.
+```{r 1_19}
+plot(strom[,2], col="red")
+lines(ema_Strom6$fitted[,1], col="blue")
+lines(ema_Strom64$fitted[,1], col="green")
+```
+
+
+
+```{r 2}
+thermo <- read_excel("Übung 7_ZR.xlsx",sheet = "2")
+ts(thermo)
+thermots <- ts(thermo, frequency = 52, start = c(2015, 1))
+```
+#### 20. Wann wird das Holt Verfahren angewendet
+Wenn die Zeitreihe einen langfristigen linearen Trend aufweist.
+
+#### 21. Glätten Sie mittels gretl die Zeitreihe y mit den Parametern α = 0.2, 0.6 und γ = 0.1?
+```{r 2_21}
+holt_21 <- HoltWinters(thermots, .2, F, .1, start.periods = 26)
+holt_61 <- HoltWinters(thermots, .6, F, .1, start.periods = 26)
+```
+
+
+#### 22. Zeigen Sie in einem Diagramm die ursprüngliche Zeitreihe y zusammen mit den zwei geglätteten Zeitreihen Holt21 und Holt61.
+```{r 2_22}
+plot(thermots[,2], col="red", xlim=c(2015, 2017))
+
+### da stimmt noch was nicht ###
+lines(holt_21$fitted[,1], col="blue")
+lines(holt_61$fitted[,1], col="green")
+```
+
+
+#### 23. Was passiert wenn der Niveauparameter α steigt?
+Glättungseffekt wird geringer
+
+#### 24. Glätten Sie mittels gretl die Zeitreihen mit den Parametern α = 0.2 und γ = 0.5?
+```{r 2_24}
+holt_25 <- HoltWinters(thermots, .2, F, .5)
+```
+
+
+#### 25. Zeigen Sie in einem Diagramm die ursprüngliche Zeitreihe y zusammen mit den zwei geglätteten Zeitreihen Holt21 und Holt25.
+```{r 2_25}
+plot(thermots[,2], col="red")
+
+### da stimmt noch was nicht ###
+lines(ts(holt_21$fitted[,1], frequency=52, start=c(2015,1)), col="blue")
+lines(ts(holt_25$fitted[,1], frequency=52, start=c(2015,1)), col="green")
+```
+
+
+#### 26. Was passiert wenn der Trendparameter γ sinkt?
+Ältere Trendentwicklung fliesst stärker in die Trendschätzung ein.
+
+#### 27. Geben Sie für das letzte Menu „number of final intra-sample predictions“ die Zahl 4 ein. Gretl wird für die letzten 4 Beobachtungen 48-52 eine in- sample Prognose (innerhalb der Stichprobe) anhand der Information bis zur Periode 47 erstellen.
+```{r 2_27}
+
+```
+?
+
+#### 28. Fügen Sie in die Zeitreihe drei neue Beobachtungen mit den Werten 0 hinzu. Erstellen Sie jetzt eine out-of-sample Prognose (ausserhalb der Stichprobe) mit den gleichen Glättungsparameter wie vorher. Anzahl Prognosewerte entspricht 3.
+```{r 2_28}
+predict(holt_25, n.ahead = 3)
+```
+
