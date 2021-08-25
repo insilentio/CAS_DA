@@ -758,13 +758,13 @@ head(i)
 library(DBI)
 library(RMySQL)
 
-# Verbindung definieren
+# Verbindung definieren (info in conn_data.txt, aber nicht mehr gültig)
 con <-  dbConnect(MySQL(),
-                  username = "dataviz",
-                  password = "CASdataviz2016",
+                  username = "",
+                  password = "",
                   host = "db4free.net",
                   port = 3306,
-                  dbname = "cas_dataviz"
+                  dbname = ""
 )
 
 # Get-Anfrage schicken
