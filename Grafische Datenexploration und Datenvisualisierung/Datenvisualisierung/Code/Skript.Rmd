@@ -1083,7 +1083,7 @@ Quelle: http://davidgohel.github.io/ReporteRs/
 ```{r skript07noexec, eval=FALSE, include=TRUE}
 # Testen Sie es aus:
 library(ReporteRsjars)
-library(ReporteRs)
+library(ReporteRs) #this package is not supported anymore -> use officeR instead
 
 # Erstellen Sie ein neues PowerPoint-Dokument 
 doc <- pptx()
