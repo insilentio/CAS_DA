@@ -1356,5 +1356,5 @@ ggplotly(p)
 #Shiny
 library(shiny)
 runExample("01_hello")
-runApp("App01", display.mode = "showcase")
+runApp("Übungen/Übungen/App01", display.mode = "showcase")
 ```
